@@ -1,19 +1,26 @@
 /**
  * @file server.js
- * @description Main server file for Home Assistant Platform Backend
- * @author [Your Name]
+ * @description Main server file for the Home Assistant Platform Backend
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 
- * This file sets up the Express server with all necessary middleware and routes.
- * It handles security configurations, rate limiting, and route organization.
+ * This file sets up the Express server, configures middleware,
+ * and organizes all API routes for the Home Assistant Platform.
  * 
  * Dependencies:
  * - express: Web framework
  * - cors: Cross-origin resource sharing
  * - helmet: Security headers
- * - morgan: HTTP request logger
+ * - morgan: HTTP request logging
  * - express-rate-limit: Rate limiting
+ * 
+ * Routes:
+ * - /api/auth: Authentication routes
+ * - /api/forum: Forum routes
+ * - /api/chat: Chat routes
+ * - /api/logs: Activity logging routes
+ * - /api/admin: Admin routes
  */
 
 const express = require('express');

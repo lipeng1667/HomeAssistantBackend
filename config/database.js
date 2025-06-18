@@ -1,7 +1,7 @@
 /**
  * @file database.js
  * @description Database configuration and connection management
- * @author [Your Name]
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 
@@ -15,7 +15,7 @@
  * Environment Variables:
  * - DB_HOST: Database host (default: localhost)
  * - DB_USER: Database user (default: root)
- * - DB_PASSWORD: Database password
+ * - DB_PASSWORD: Database password (default: '')
  * - DB_NAME: Database name (default: home_assistant)
  */
 

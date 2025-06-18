@@ -1,19 +1,19 @@
 /**
  * @file logs.js
  * @description User activity logging routes
- * @author [Your Name]
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 
- * This file handles user activity logging functionality. It provides
- * endpoints for recording various user actions and their metadata.
+ * This file handles user activity logging functionality, providing endpoints
+ * for recording various user actions and their metadata.
  * 
  * Dependencies:
  * - express: Web framework
  * - mysql2: Database operations
  * 
  * Routes:
- * - POST /api/logs/activity - Log user activity
+ * - POST /api/logs/activity: Log user activity
  */
 
 const express = require('express');

@@ -1,7 +1,7 @@
 /**
  * @file chat.js
  * @description Chat routes for real-time messaging functionality
- * @author [Your Name]
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 

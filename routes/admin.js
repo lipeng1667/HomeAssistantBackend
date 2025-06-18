@@ -1,7 +1,7 @@
 /**
  * @file admin.js
  * @description Admin routes for platform management
- * @author [Your Name]
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 
@@ -15,11 +15,11 @@
  * - mysql2: Database operations
  * 
  * Routes:
- * - POST /api/admin/login - Admin login
- * - GET /api/admin/forum/questions - View all questions
- * - POST /api/admin/forum/questions/:id/reply - Admin reply to question
- * - GET /api/admin/chat/:user_id/messages - View chat with user
- * - POST /api/admin/chat/:user_id/messages - Send message to user
+ * - POST /api/admin/login: Admin login
+ * - GET /api/admin/forum/questions: View all questions
+ * - POST /api/admin/forum/questions/:id/reply: Admin reply to question
+ * - GET /api/admin/chat/:user_id/messages: View chat with user
+ * - POST /api/admin/chat/:user_id/messages: Send message to user
  */
 
 const express = require('express');

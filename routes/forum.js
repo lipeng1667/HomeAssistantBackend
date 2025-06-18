@@ -1,7 +1,7 @@
 /**
  * @file forum.js
- * @description Forum routes for questions and replies management
- * @author [Your Name]
+ * @description Forum routes for managing questions and replies
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 
@@ -13,10 +13,10 @@
  * - mysql2: Database operations
  * 
  * Routes:
- * - GET /api/forum/questions - List all questions
- * - POST /api/forum/questions - Create new question
- * - GET /api/forum/questions/:id - Get question details
- * - POST /api/forum/questions/:id/reply - Post a reply
+ * - GET /api/forum/questions: List all questions
+ * - POST /api/forum/questions: Create a new question
+ * - GET /api/forum/questions/:id: Get question details
+ * - POST /api/forum/questions/:id/reply: Post a reply
  */
 
 const express = require('express');

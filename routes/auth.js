@@ -1,7 +1,7 @@
 /**
  * @file auth.js
  * @description Authentication routes for user login and logout
- * @author [Your Name]
+ * @author Michael Lee
  * @created 2024-03-19
  * @modified 2024-03-19
  * 
