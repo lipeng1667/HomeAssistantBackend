@@ -1,6 +1,171 @@
-# Home Assistant Platform – Backend Overview
+# Home Assistant Platform Backend
 
-This backend project powers the Home Assistant Platform, which supports an iOS app with anonymous login, a community-style forum, real-time chat (IM), and a web-based admin interface.
+A robust backend system for the Home Assistant Platform, providing APIs for user authentication, forum management, real-time chat, and admin functionality.
+
+## Features
+
+- User Authentication (Anonymous login)
+- Forum System (Questions and Replies)
+- Real-time Chat System
+- Activity Logging
+- Admin Panel
+- Secure API Endpoints
+- Rate Limiting
+- Database Optimization
+
+## Prerequisites
+
+- Node.js (v14 or higher)
+- MySQL (v8.0 or higher)
+- npm or yarn
+
+## Local Development Setup
+
+1. Clone the repository:
+```bash
+git clone [repository-url]
+cd HomeAssistantBackend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env` file based on `.env.example`:
+```bash
+cp .env.example .env
+```
+
+4. Configure your environment variables in `.env`:
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Database Configuration
+DB_HOST=localhost
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_NAME=home_assistant
+
+# JWT Configuration
+JWT_SECRET=your_jwt_secret
+JWT_ADMIN_SECRET=your_admin_jwt_secret
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+```
+
+5. Set up the database:
+```bash
+mysql -u your_db_user -p your_db_name < database.sql
+```
+
+6. Start the development server:
+```bash
+npm run dev
+```
+
+## Remote Server Deployment
+
+1. SSH into your remote server:
+```bash
+ssh user@your-server-ip
+```
+
+2. Install Node.js and MySQL if not already installed:
+```bash
+# For Ubuntu/Debian
+sudo apt update
+sudo apt install nodejs npm mysql-server
+
+# For CentOS/RHEL
+sudo yum install nodejs npm mysql-server
+```
+
+3. Clone the repository:
+```bash
+git clone [repository-url]
+cd HomeAssistantBackend
+```
+
+4. Install dependencies:
+```bash
+npm install
+```
+
+5. Create and configure `.env` file:
+```bash
+cp .env.example .env
+nano .env  # Edit with your production settings
+```
+
+6. Set up the database:
+```bash
+mysql -u your_db_user -p your_db_name < database.sql
+```
+
+7. Start the production server:
+```bash
+npm start
+```
+
+### Using PM2 for Process Management
+
+For better process management in production:
+
+1. Install PM2 globally:
+```bash
+npm install -g pm2
+```
+
+2. Start the application with PM2:
+```bash
+pm2 start server.js --name "home-assistant-backend"
+```
+
+3. Other useful PM2 commands:
+```bash
+pm2 status                    # Check application status
+pm2 logs home-assistant-backend  # View logs
+pm2 restart home-assistant-backend  # Restart application
+pm2 stop home-assistant-backend    # Stop application
+```
+
+## API Documentation
+
+The API documentation is available in JSDoc format. To generate HTML documentation:
+
+```bash
+npm install -g jsdoc
+jsdoc -c jsdoc.json
+```
+
+## Security Considerations
+
+1. Always use HTTPS in production
+2. Keep your JWT secrets secure and complex
+3. Regularly update dependencies
+4. Monitor rate limiting and adjust as needed
+5. Keep your MySQL server secure and updated
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Author
+
+Michael Lee
 
 ---
 
