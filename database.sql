@@ -3,13 +3,14 @@ SET sql_mode = 'STRICT_ALL_TABLES';
 
 CREATE TABLE IF NOT EXISTS users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    uuid CHAR(36) NOT NULL UNIQUE,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
     device_id VARCHAR(255) NOT NULL UNIQUE,
     username VARCHAR(100),
     phone_number VARCHAR(20),
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS forum_questions (
@@ -20,9 +21,11 @@ CREATE TABLE IF NOT EXISTS forum_questions (
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted, 2 = closed',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS forum_replies (
@@ -33,9 +36,11 @@ CREATE TABLE IF NOT EXISTS forum_replies (
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (question_id) REFERENCES forum_questions(id) ON DELETE CASCADE,
     INDEX idx_question_id (question_id),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
@@ -43,9 +48,11 @@ CREATE TABLE IF NOT EXISTS conversations (
     user_id INT UNSIGNED NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_message_at TIMESTAMP NULL DEFAULT NULL,
     UNIQUE KEY unique_user (user_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user_id (user_id)
+    INDEX idx_user_id (user_id),
+    INDEX idx_last_message_at (last_message_at)
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -56,7 +63,8 @@ CREATE TABLE IF NOT EXISTS messages (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-    INDEX idx_conversation_id (conversation_id)
+    INDEX idx_conversation_id (conversation_id),
+    INDEX idx_conversation_timestamp (conversation_id, timestamp)
 );
 
 CREATE TABLE IF NOT EXISTS admins (
@@ -65,7 +73,8 @@ CREATE TABLE IF NOT EXISTS admins (
     password_hash VARCHAR(255) NOT NULL,
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = active, 1 = disabled',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_logs (
@@ -76,6 +85,7 @@ CREATE TABLE IF NOT EXISTS user_logs (
     metadata TEXT COMMENT 'optional JSON data for context (e.g., device, tab name)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user_id (user_id)
-    INDEX idx_action_type (action_type)
+    INDEX idx_user_id (user_id),
+    INDEX idx_action_type (action_type),
+    INDEX idx_user_created_at (user_id, created_at)
 );
