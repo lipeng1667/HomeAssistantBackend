@@ -16,28 +16,32 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 ## Prerequisites
 
 - Node.js (v14 or higher)
-- MySQL (v8.0 or higher)
+- MariaDB (v10.5 or higher)
 - npm or yarn
 
 ## Local Development Setup
 
 1. Clone the repository:
+
 ```bash
 git clone [repository-url]
 cd HomeAssistantBackend
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Create a `.env` file based on `.env.example`:
+
 ```bash
 cp .env.example .env
 ```
 
 4. Configure your environment variables in `.env`:
+
 ```env
 # Server Configuration
 PORT=3000
@@ -58,12 +62,39 @@ RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 ```
 
-5. Set up the database:
+5. Install and start MariaDB:
+
 ```bash
-mysql -u your_db_user -p your_db_name < database.sql
+# For macOS
+brew install mariadb
+brew services start mariadb
+
+# For Ubuntu/Debian
+sudo apt update
+sudo apt install mariadb-server
+sudo systemctl start mariadb
+
+# For Windows
+# Download and install from https://mariadb.org/download/
 ```
 
-6. Start the development server:
+6. Set up the database:
+
+```bash
+# Create database and user
+sudo mariadb
+CREATE DATABASE home_assistant;
+CREATE USER 'your_db_user'@'localhost' IDENTIFIED BY 'your_db_password';
+GRANT ALL PRIVILEGES ON home_assistant.* TO 'your_db_user'@'localhost';
+FLUSH PRIVILEGES;
+exit;
+
+# Import schema
+mariadb -u your_db_user -p home_assistant < database.sql
+```
+
+7. Start the development server:
+
 ```bash
 npm run dev
 ```
@@ -71,43 +102,61 @@ npm run dev
 ## Remote Server Deployment
 
 1. SSH into your remote server:
+
 ```bash
 ssh user@your-server-ip
 ```
 
-2. Install Node.js and MySQL if not already installed:
+2. Install Node.js and MariaDB if not already installed:
+
 ```bash
 # For Ubuntu/Debian
 sudo apt update
-sudo apt install nodejs npm mysql-server
+sudo apt install nodejs npm mariadb-server
 
 # For CentOS/RHEL
-sudo yum install nodejs npm mysql-server
+sudo yum install nodejs npm mariadb-server
 ```
 
-3. Clone the repository:
+3. Start and secure MariaDB:
+
+```bash
+# Start MariaDB service
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
+
+# Run security script
+sudo mariadb-secure-installation
+```
+
+4. Clone the repository:
+
 ```bash
 git clone [repository-url]
 cd HomeAssistantBackend
 ```
 
-4. Install dependencies:
+5. Install dependencies:
+
 ```bash
 npm install
 ```
 
-5. Create and configure `.env` file:
+6. Create and configure `.env` file:
+
 ```bash
 cp .env.example .env
 nano .env  # Edit with your production settings
 ```
 
-6. Set up the database:
+7. Set up the database:
+
 ```bash
-mysql -u your_db_user -p your_db_name < database.sql
+mariadb -u your_db_user -p your_db_name < database.sql
 ```
 
-7. Start the production server:
+8. Start the production server:
+
 ```bash
 npm start
 ```
@@ -117,16 +166,19 @@ npm start
 For better process management in production:
 
 1. Install PM2 globally:
+
 ```bash
 npm install -g pm2
 ```
 
 2. Start the application with PM2:
+
 ```bash
 pm2 start server.js --name "home-assistant-backend"
 ```
 
 3. Other useful PM2 commands:
+
 ```bash
 pm2 status                    # Check application status
 pm2 logs home-assistant-backend  # View logs
@@ -149,7 +201,9 @@ jsdoc -c jsdoc.json
 2. Keep your JWT secrets secure and complex
 3. Regularly update dependencies
 4. Monitor rate limiting and adjust as needed
-5. Keep your MySQL server secure and updated
+5. Keep your MariaDB server secure and updated
+6. Regularly backup your database
+7. Use strong passwords for database users
 
 ## Contributing
 
