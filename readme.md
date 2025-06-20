@@ -126,7 +126,7 @@ sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
 # Run security script
-sudo mariadb-secure-installation
+sudo mysql-secure-installation
 ```
 
 4. Clone the repository:

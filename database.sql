@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     phone_number VARCHAR(20),
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL
 );
 
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS forum_questions (
     content TEXT NOT NULL,
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted, 2 = closed',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id),
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS forum_replies (
     content TEXT NOT NULL,
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (question_id) REFERENCES forum_questions(id) ON DELETE CASCADE,
     INDEX idx_question_id (question_id),
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL,
     last_message_at TIMESTAMP NULL DEFAULT NULL,
     UNIQUE KEY unique_user (user_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_role ENUM('user', 'admin') NOT NULL,
     message TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     INDEX idx_conversation_id (conversation_id),
     INDEX idx_conversation_timestamp (conversation_id, timestamp)
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS admins (
     password_hash VARCHAR(255) NOT NULL,
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = active, 1 = disabled',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL
 );
 
