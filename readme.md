@@ -44,7 +44,7 @@ cp .env.example .env
 
 ```env
 # Server Configuration
-PORT=3000
+PORT=10000
 NODE_ENV=development
 
 # Database Configuration
@@ -174,16 +174,73 @@ npm install -g pm2
 2. Start the application with PM2:
 
 ```bash
-pm2 start server.js --name "home-assistant-backend"
+# Using ecosystem config (recommended)
+npm run pm2:start
+
+# Or directly
+pm2 start ecosystem.config.js
 ```
 
 3. Other useful PM2 commands:
 
 ```bash
-pm2 status                    # Check application status
-pm2 logs home-assistant-backend  # View logs
-pm2 restart home-assistant-backend  # Restart application
-pm2 stop home-assistant-backend    # Stop application
+npm run pm2:status                    # Check application status
+npm run pm2:restart                   # Restart application
+npm run pm2:stop                      # Stop application
+npm run pm2:delete                    # Remove from PM2
+
+# Or using PM2 directly
+pm2 status                            # Check application status
+pm2 logs home-assistant-backend       # View logs
+pm2 restart home-assistant-backend    # Restart application
+pm2 stop home-assistant-backend       # Stop application
+```
+
+## CLI Dashboard
+
+The project includes a comprehensive CLI dashboard for monitoring and managing the backend application.
+
+### Features
+
+- 📊 Real-time application status monitoring
+- 📋 Log viewing (combined, output, error, PM2)
+- 🔄 Application lifecycle management (start/stop/restart)
+- 📈 Performance monitoring with live updates
+- 🗑️ Log management and clearing
+- 🔧 Configuration viewing
+
+### Usage
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Start the CLI dashboard:
+
+```bash
+npm run dashboard
+```
+
+3. Use the interactive menu to:
+   - View application status and health checks
+   - Monitor real-time performance metrics
+   - View and manage logs
+   - Control application lifecycle
+   - View configuration settings
+
+### Dashboard Commands
+
+```bash
+# Start dashboard
+npm run dashboard
+
+# PM2 Management
+npm run pm2:start     # Start with PM2
+npm run pm2:stop      # Stop PM2 process
+npm run pm2:restart   # Restart PM2 process
+npm run pm2:delete    # Remove from PM2
 ```
 
 ## API Documentation
