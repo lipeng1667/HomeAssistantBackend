@@ -212,6 +212,32 @@ router.post('/forum/questions/:id/reply', authenticateAdmin, async (req, res) =>
 });
 
 /**
+ * @description Finds an existing conversation or creates a new one.
+ * @param {number} userId - The ID of the user.
+ * @param {boolean} [createIfNotFound=false] - Whether to create a conversation if not found.
+ * @returns {Promise<Object|null>} The conversation object or null.
+ */
+async function getOrCreateConversation(userId, createIfNotFound = false) {
+  const [conversations] = await pool.execute(
+    'SELECT * FROM conversations WHERE user_id = ?',
+    [userId]
+  );
+
+  if (conversations.length > 0) {
+    return conversations[0];
+  }
+
+  if (createIfNotFound) {
+    const [result] = await pool.execute(
+      'INSERT INTO conversations (user_id) VALUES (?)',
+      [userId]
+    );
+    return { id: result.insertId, user_id: userId };
+  }
+  return null;
+}
+
+/**
  * @description Get chat history with specific user
  * @async
  * @function getAdminChat
@@ -231,13 +257,9 @@ router.get('/chat/:user_id/messages', authenticateAdmin, async (req, res) => {
   try {
     const userId = req.params.user_id;
 
-    // Get conversation
-    const [conversations] = await pool.execute(
-      'SELECT * FROM conversations WHERE user_id = ?',
-      [userId]
-    );
+    const conversation = await getOrCreateConversation(userId);
 
-    if (conversations.length === 0) {
+    if (!conversation) {
       return res.json({
         status: 'success',
         data: {
@@ -247,7 +269,7 @@ router.get('/chat/:user_id/messages', authenticateAdmin, async (req, res) => {
       });
     }
 
-    const conversationId = conversations[0].id;
+    const conversationId = conversation.id;
 
     // Get messages
     const [messages] = await pool.execute(`
@@ -311,40 +333,28 @@ router.post('/chat/:user_id/messages', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Get or create conversation
-    let [conversations] = await pool.execute(
-      'SELECT * FROM conversations WHERE user_id = ?',
-      [userId]
-    );
-
-    let conversationId;
-    if (conversations.length === 0) {
-      const [result] = await pool.execute(
-        'INSERT INTO conversations (user_id) VALUES (?)',
-        [userId]
-      );
-      conversationId = result.insertId;
-    } else {
-      conversationId = conversations[0].id;
+    const conversation = await getOrCreateConversation(userId, true);
+    if (!conversation) {
+      throw new Error('Failed to get or create a conversation.');
     }
 
     // Insert message
     const [result] = await pool.execute(
       'INSERT INTO messages (conversation_id, admin_id, sender_role, message) VALUES (?, ?, "admin", ?)',
-      [conversationId, adminId, message]
+      [conversation.id, adminId, message]
     );
 
     // Update conversation's last_message_at
     await pool.execute(
       'UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [conversationId]
+      [conversation.id]
     );
 
     res.status(201).json({
       status: 'success',
       data: {
         id: result.insertId,
-        conversation_id: conversationId,
+        conversation_id: conversation.id,
         message,
         sender_role: 'admin',
         timestamp: new Date()

@@ -4,9 +4,9 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 
 ## Features
 
-- User Authentication (Anonymous login)
+- User Authentication (Anonymous, device-based login)
 - Forum System (Questions and Replies)
-- Real-time Chat System
+- Instant Messaging System (User-to-Admin)
 - Activity Logging
 - Admin Panel
 - Secure API Endpoints
@@ -311,5 +311,6 @@ This repository includes:
 ## 📌 TODO
 
 - [ ] Rate limiting and abuse prevention
+- [x] Rate limiting and abuse prevention
 - [ ] Admin dashboard UI
 - [ ] WebSocket support for real-time IM

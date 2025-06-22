@@ -23,6 +23,7 @@
  * - /api/admin: Admin routes
  */
 
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -38,6 +39,30 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 
+// === Simple Stats Middleware for CLI Dashboard ===
+const stats = {
+  total: 0,
+  perPath: {},
+  start: Date.now()
+};
+
+let activeConnections = 0;
+
+app.use((req, res, next) => {
+  stats.total++;
+  stats.perPath[req.path] = (stats.perPath[req.path] || 0) + 1;
+  next();
+});
+
+app.get('/api/cli-stats', (req, res) => {
+  res.json({
+    totalRequests: stats.total,
+    perPath: stats.perPath,
+    uptime: Math.round((Date.now() - stats.start) / 1000), // seconds
+    activeConnections
+  });
+});
+
 // Security middleware
 app.use(helmet());
 app.use(cors());
@@ -46,8 +71,8 @@ app.use(morgan('combined'));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10) // limit each IP to 100 requests per windowMs
 });
 app.use(limiter);
 
@@ -68,6 +93,14 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-}); 
+});
+
+// Track active HTTP connections
+server.on('connection', (socket) => {
+  activeConnections++;
+  socket.on('close', () => {
+    activeConnections--;
+  });
+});

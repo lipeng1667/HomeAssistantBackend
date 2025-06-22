@@ -79,32 +79,36 @@ router.get('/questions', async (req, res) => {
  * @throws {500} If server error occurs
  */
 router.post('/questions', authenticateUser, async (req, res) => {
+  let connection;
   try {
     const { title, content } = req.body;
     const userId = req.user.id;
 
     if (!title || !content) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Title and content are required'
-      });
+      return res.status(400).json({ status: 'error', message: 'Title and content are required' });
     }
 
-    const [result] = await pool.execute(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [result] = await connection.execute(
       'INSERT INTO forum_questions (user_id, title, content) VALUES (?, ?, ?)',
       [userId, title, content]
     );
+    const questionId = result.insertId;
 
     // Log the activity
-    await pool.execute(
+    await connection.execute(
       'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 1, "create_question")',
       [userId]
     );
 
+    await connection.commit();
+
     res.status(201).json({
       status: 'success',
       data: {
-        id: result.insertId,
+        id: questionId,
         title,
         content,
         user_id: userId
@@ -112,10 +116,13 @@ router.post('/questions', authenticateUser, async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating question:', error);
+    if (connection) await connection.rollback();
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
     });
+  } finally {
+    if (connection) connection.release();
   }
 });
 

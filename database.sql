@@ -31,13 +31,17 @@ CREATE TABLE IF NOT EXISTS forum_questions (
 CREATE TABLE IF NOT EXISTS forum_replies (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     question_id INT UNSIGNED NOT NULL,
-    responder_role ENUM('user', 'admin') NOT NULL DEFAULT 'admin',
+    user_id INT UNSIGNED DEFAULT NULL,
+    admin_id INT UNSIGNED DEFAULT NULL,
+    responder_role ENUM('user', 'admin') NOT NULL,
     content TEXT NOT NULL,
     status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (question_id) REFERENCES forum_questions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE SET NULL,
     INDEX idx_question_id (question_id),
     INDEX idx_status (status),
     INDEX idx_created_at (created_at)
@@ -58,10 +62,14 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE TABLE IF NOT EXISTS messages (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     conversation_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED DEFAULT NULL,
+    admin_id INT UNSIGNED DEFAULT NULL,
     sender_role ENUM('user', 'admin') NOT NULL,
     message TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE SET NULL,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     INDEX idx_conversation_id (conversation_id),
     INDEX idx_conversation_timestamp (conversation_id, timestamp)
