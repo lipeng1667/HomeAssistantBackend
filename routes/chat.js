@@ -2,8 +2,8 @@
  * @file chat.js
  * @description Chat routes for real-time messaging functionality
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file handles all chat-related routes including message history
  * retrieval and message sending. It manages conversations between users

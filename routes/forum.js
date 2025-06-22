@@ -2,8 +2,8 @@
  * @file forum.js
  * @description Forum routes for managing questions and replies
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file handles all forum-related routes including question listing,
  * creation, and reply management. It supports both user and admin interactions.

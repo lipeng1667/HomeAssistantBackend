@@ -4,8 +4,8 @@
  * @file dashboard.mjs
  * @description CLI Dashboard for Home Assistant Backend Management
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file provides a command-line interface for monitoring and managing
  * the Home Assistant backend application. It includes real-time monitoring,

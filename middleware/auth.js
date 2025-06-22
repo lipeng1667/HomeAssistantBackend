@@ -2,8 +2,8 @@
  * @file auth.js
  * @description Authentication middleware for user and admin routes
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file provides middleware functions for JWT token verification
  * and user/admin session management.

@@ -2,8 +2,8 @@
  * @file logs.js
  * @description User activity logging routes
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file handles user activity logging functionality, providing endpoints
  * for recording various user actions and their metadata.

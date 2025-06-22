@@ -2,8 +2,8 @@
  * @file admin.js
  * @description Admin routes for platform management
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file handles all admin-related routes including authentication,
  * forum management, and chat interactions with users.

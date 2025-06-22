@@ -2,8 +2,8 @@
  * @file database.js
  * @description Database configuration and connection management
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file handles MySQL database connection configuration and pool management.
  * It provides a connection pool for efficient database operations and includes

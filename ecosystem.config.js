@@ -2,8 +2,8 @@
  * @file ecosystem.config.js
  * @description PM2 ecosystem configuration for Home Assistant Backend
  * @author Michael Lee
- * @created 2024-03-19
- * @modified 2024-03-19
+ * @created 2025-06-17
+ * @modified 2025-06-17
  * 
  * This file configures PM2 process manager for the Home Assistant backend application.
  * It includes settings for development and production environments with proper
