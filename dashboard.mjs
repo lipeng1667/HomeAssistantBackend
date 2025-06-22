@@ -73,6 +73,16 @@ async function getPM2Status() {
   }
 }
 
+// Server Stats Check (using existing /api/cli-stats endpoint)
+async function getServerStats() {
+  try {
+    const response = await axios.get(`${CONFIG.apiBaseUrl}/api/cli-stats`, { timeout: 5000 });
+    return { status: 'online', data: response.data };
+  } catch (error) {
+    return { status: 'offline', error: error.message };
+  }
+}
+
 // API Health Check
 async function checkAPIHealth() {
   try {
@@ -116,6 +126,50 @@ function displayStatus(status) {
   ));
 }
 
+function displayServerStats(stats) {
+  if (!stats || stats.status === 'offline') {
+    console.log(chalk.red('❌ Server stats unavailable'));
+    return;
+  }
+
+  const data = stats.data;
+  const info = [
+    `📊 Total Requests: ${chalk.cyan(data.totalRequests)}`,
+    `🔗 Active Connections: ${chalk.yellow(data.activeConnections)}`,
+    `⏱️  Server Uptime: ${chalk.green(formatUptime(data.uptime))}`,
+    `📈 Requests/sec: ${chalk.magenta((data.totalRequests / Math.max(data.uptime, 1)).toFixed(2))}`
+  ];
+
+  console.log(boxen(
+    info.join('\n'),
+    { padding: 1, borderColor: 'cyan', title: 'Server Statistics' }
+  ));
+}
+
+function displayAPIStats(stats) {
+  if (!stats || stats.status === 'offline') {
+    return;
+  }
+
+  const data = stats.data;
+  const topEndpoints = Object.entries(data.perPath)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5);
+
+  if (topEndpoints.length === 0) {
+    return;
+  }
+
+  const endpointStats = topEndpoints.map(([path, count]) =>
+    `${chalk.gray(path)}: ${chalk.yellow(count)}`
+  ).join('\n');
+
+  console.log(boxen(
+    endpointStats,
+    { padding: 1, borderColor: 'yellow', title: 'Top API Endpoints' }
+  ));
+}
+
 function displayProcessInfo(process) {
   if (!process) {
     console.log(chalk.red('❌ Process not found'));
@@ -125,14 +179,13 @@ function displayProcessInfo(process) {
   const info = [
     `📊 Memory: ${formatBytes(process.monit.memory)}`,
     `💻 CPU: ${process.monit.cpu}%`,
-    `⏱️  Uptime: ${formatUptime(process.pm2_env.pm_uptime)}`,
     `🔄 Restarts: ${process.pm2_env.restart_time}`,
     `📁 Path: ${process.pm2_env.pm_cwd}`
   ];
 
   console.log(boxen(
     info.join('\n'),
-    { padding: 1, borderColor: 'cyan', title: 'Process Information' }
+    { padding: 1, borderColor: 'magenta', title: 'PM2 Process Info' }
   ));
 }
 
@@ -152,12 +205,12 @@ function displayHealthChecks(apiHealth, dbHealth) {
 async function showMainMenu() {
   const choices = [
     { name: '📊 View Status', value: 'status' },
+    { name: '📈 Real-time Monitor', value: 'realtime' },
     { name: '📋 View Logs', value: 'logs' },
     { name: '🔄 Restart Application', value: 'restart' },
     { name: '⏹️  Stop Application', value: 'stop' },
     { name: '▶️  Start Application', value: 'start' },
     { name: '🗑️  Clear Logs', value: 'clear-logs' },
-    { name: '📈 Performance Monitor', value: 'monitor' },
     { name: '🔧 Configuration', value: 'config' },
     { name: '❌ Exit', value: 'exit' }
   ];
@@ -178,8 +231,9 @@ async function viewStatus() {
   const spinner = ora('Checking application status...').start();
 
   try {
-    const [process, apiHealth, dbHealth] = await Promise.all([
+    const [process, serverStats, apiHealth, dbHealth] = await Promise.all([
       getPM2Status(),
+      getServerStats(),
       checkAPIHealth(),
       checkDatabaseStatus()
     ]);
@@ -188,8 +242,11 @@ async function viewStatus() {
     console.clear();
     displayHeader();
 
-    const status = process ? 'online' : 'offline';
+    const status = serverStats.status;
     displayStatus(status);
+
+    displayServerStats(serverStats);
+    displayAPIStats(serverStats);
 
     if (process) {
       displayProcessInfo(process);
@@ -201,6 +258,51 @@ async function viewStatus() {
     spinner.fail('Failed to check status');
     console.error(chalk.red(error.message));
   }
+}
+
+async function realtimeMonitor() {
+  console.log(chalk.yellow('Starting real-time monitor...'));
+  console.log(chalk.gray('Press Ctrl+C to stop\n'));
+
+  const monitor = setInterval(async () => {
+    try {
+      const [process, serverStats, apiHealth, dbHealth] = await Promise.all([
+        getPM2Status(),
+        getServerStats(),
+        checkAPIHealth(),
+        checkDatabaseStatus()
+      ]);
+
+      console.clear();
+      displayHeader();
+
+      const status = serverStats.status;
+      displayStatus(status);
+
+      displayServerStats(serverStats);
+      displayAPIStats(serverStats);
+
+      if (process) {
+        displayProcessInfo(process);
+      }
+
+      displayHealthChecks(apiHealth, dbHealth);
+
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(chalk.gray(`\nLast updated: ${timestamp}`));
+      console.log(chalk.gray('Press Ctrl+C to stop monitoring'));
+
+    } catch (error) {
+      console.error(chalk.red('Monitor error:', error.message));
+    }
+  }, 2000);
+
+  // Handle Ctrl+C
+  process.on('SIGINT', () => {
+    clearInterval(monitor);
+    console.log(chalk.yellow('\nMonitor stopped'));
+    process.exit(0);
+  });
 }
 
 async function viewLogs() {
@@ -328,34 +430,6 @@ async function clearLogs() {
   }
 }
 
-async function performanceMonitor() {
-  console.log(chalk.yellow('Starting performance monitor...'));
-  console.log(chalk.gray('Press Ctrl+C to stop\n'));
-
-  const monitor = setInterval(async () => {
-    try {
-      const process = await getPM2Status();
-      if (process) {
-        console.clear();
-        displayHeader();
-        displayProcessInfo(process);
-
-        const timestamp = new Date().toLocaleTimeString();
-        console.log(chalk.gray(`Last updated: ${timestamp}`));
-      }
-    } catch (error) {
-      console.error(chalk.red('Monitor error:', error.message));
-    }
-  }, 2000);
-
-  // Handle Ctrl+C
-  process.on('SIGINT', () => {
-    clearInterval(monitor);
-    console.log(chalk.yellow('\nMonitor stopped'));
-    process.exit(0);
-  });
-}
-
 async function showConfiguration() {
   const config = [
     `🌐 API Base URL: ${CONFIG.apiBaseUrl}`,
@@ -383,6 +457,9 @@ async function main() {
         case 'status':
           await viewStatus();
           break;
+        case 'realtime':
+          await realtimeMonitor();
+          break;
         case 'logs':
           await viewLogs();
           break;
@@ -398,9 +475,6 @@ async function main() {
         case 'clear-logs':
           await clearLogs();
           break;
-        case 'monitor':
-          await performanceMonitor();
-          break;
         case 'config':
           await showConfiguration();
           break;
@@ -409,7 +483,7 @@ async function main() {
           process.exit(0);
       }
 
-      if (action !== 'monitor') {
+      if (action !== 'realtime') {
         console.log(chalk.gray('\nPress Enter to continue...'));
         await new Promise(resolve => process.stdin.once('data', resolve));
         console.clear();
