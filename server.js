@@ -39,6 +39,9 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 
+// Trust proxy headers for proper IP detection behind Nginx
+app.set('trust proxy', true);
+
 // === Simple Stats Middleware for CLI Dashboard ===
 const stats = {
   total: 0,
@@ -49,8 +52,17 @@ const stats = {
 let activeConnections = 0;
 
 app.use((req, res, next) => {
-  stats.total++;
-  stats.perPath[req.path] = (stats.perPath[req.path] || 0) + 1;
+  // Get the real client IP (works with and without Nginx)
+  const clientIP = req.ip;
+
+  // Skip counting requests from localhost (dashboard requests)
+  const isLocalhost = clientIP === '127.0.0.1' || clientIP === '::1' || clientIP === 'localhost';
+
+  if (!isLocalhost) {
+    stats.total++;
+    stats.perPath[req.path] = (stats.perPath[req.path] || 0) + 1;
+  }
+
   next();
 });
 
@@ -99,8 +111,19 @@ const server = app.listen(PORT, () => {
 
 // Track active HTTP connections
 server.on('connection', (socket) => {
-  activeConnections++;
-  socket.on('close', () => {
-    activeConnections--;
-  });
+  // Get the remote address of the connection
+  const remoteAddress = socket.remoteAddress;
+
+  // Skip counting localhost connections (dashboard connections)
+  const isLocalhost = remoteAddress === '127.0.0.1' ||
+    remoteAddress === '::1' ||
+    remoteAddress === 'localhost' ||
+    remoteAddress === '::ffff:127.0.0.1'; // IPv4-mapped IPv6
+
+  if (!isLocalhost) {
+    activeConnections++;
+    socket.on('close', () => {
+      activeConnections--;
+    });
+  }
 });
