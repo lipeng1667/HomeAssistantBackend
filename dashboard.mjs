@@ -34,7 +34,7 @@ const execAsync = promisify(exec);
 
 // Configuration
 const CONFIG = {
-  apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:10000',
+  apiBaseUrl: process.env.API_BASE_URL || 'http://127.0.0.1:10000',
   appName: 'home-assistant-backend',
   logPath: './logs'
 };
@@ -86,7 +86,7 @@ async function getServerStats() {
 // API Health Check
 async function checkAPIHealth() {
   try {
-    const response = await axios.get(`${CONFIG.apiBaseUrl}/api/health`, { timeout: 5000 });
+    const response = await axios.get(`${CONFIG.apiBaseUrl}/health`, { timeout: 5000 });
     return { status: 'healthy', response: response.data };
   } catch (error) {
     return { status: 'unhealthy', error: error.message };
@@ -96,7 +96,7 @@ async function checkAPIHealth() {
 // Database Status Check
 async function checkDatabaseStatus() {
   try {
-    const response = await axios.get(`${CONFIG.apiBaseUrl}/api/admin/health/db`, { timeout: 5000 });
+    const response = await axios.get(`${CONFIG.apiBaseUrl}/health/db`, { timeout: 5000 });
     return { status: 'connected', data: response.data };
   } catch (error) {
     return { status: 'disconnected', error: error.message };
@@ -329,8 +329,37 @@ async function viewLogs() {
       const { stdout } = await execAsync(`pm2 logs ${CONFIG.appName} --lines 50 --nostream`);
       logContent = stdout;
     } else {
-      const logFile = path.join(CONFIG.logPath, `${logType}.log`);
-      logContent = await fs.readFile(logFile, 'utf8');
+      // Try to find PM2 numbered log files first
+      let logFile = path.join(CONFIG.logPath, `${logType}.log`);
+      
+      try {
+        // Check if the direct log file exists
+        await fs.access(logFile);
+        logContent = await fs.readFile(logFile, 'utf8');
+      } catch {
+        // If not found, try to find numbered log files (PM2 format)
+        try {
+          const logDir = await fs.readdir(CONFIG.logPath);
+          const numberedLogs = logDir
+            .filter(file => file.startsWith(`${logType}-`) && file.endsWith('.log'))
+            .sort((a, b) => {
+              const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+              const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+              return numB - numA; // Newest first
+            });
+          
+          if (numberedLogs.length > 0) {
+            // Read the most recent numbered log file
+            const latestLog = path.join(CONFIG.logPath, numberedLogs[0]);
+            logContent = await fs.readFile(latestLog, 'utf8');
+          } else {
+            throw new Error(`No ${logType} log files found`);
+          }
+        } catch {
+          throw new Error(`No ${logType} log files found`);
+        }
+      }
+      
       logContent = logContent.split('\n').slice(-50).join('\n'); // Last 50 lines
     }
 

@@ -19,20 +19,26 @@
  * - DB_NAME: Database name (default: home_assistant)
  */
 
-const mysql = require('mysql2/promise');
+const mysql = require('mysql2/promise')
+const config = require('./index')
 
 /**
  * @description Creates and configures the MySQL connection pool
  * @type {Pool}
  */
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'home_assistant',
+  host: config.database.host,
+  user: config.database.user,
+  password: config.database.password,
+  database: config.database.database,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  connectionLimit: config.database.connectionLimit,
+  queueLimit: config.database.queueLimit,
+  acquireTimeout: config.database.acquireTimeout,
+  timeout: config.database.timeout,
+  idleTimeout: config.database.idleTimeout,
+  reconnect: true,
+  typeCast: true
 });
 
 /**

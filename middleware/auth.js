@@ -19,6 +19,7 @@
 
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
+const config = require('../config');
 
 /**
  * @description Middleware for user authentication
@@ -48,7 +49,7 @@ const authenticateUser = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, config.jwt.secret);
 
     // Verify user exists and is active
     const [users] = await pool.execute(
@@ -118,7 +119,7 @@ const authenticateAdmin = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_ADMIN_SECRET || 'your-admin-secret-key');
+    const decoded = jwt.verify(token, config.jwt.adminSecret);
 
     // Verify admin exists and is active
     const [admins] = await pool.execute(

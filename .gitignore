@@ -1,1 +1,4 @@
 .env
+CLAUDE.md
+.claude_code_rules.md
+DEPLOYMENT.md

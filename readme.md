@@ -309,15 +309,15 @@ This repository includes:
 
 ### 🔑 Auth (Anonymous)
 
-| Method | Endpoint             | Description                            |
-|--------|----------------------|----------------------------------------|
-| POST   | `/api/auth/login`    | Anonymous login using UUID & device_id |
-| POST   | `/api/auth/logout`   | End session                            |
+| Method | Endpoint           | Description                            |
+| ------ | ------------------ | -------------------------------------- |
+| POST   | `/api/auth/login`  | Anonymous login using UUID & device_id |
+| POST   | `/api/auth/logout` | End session                            |
 
 ### 💬 Forum
 
-| Method | Endpoint                        | Description               |
-|--------|----------------------------------|---------------------------|
+| Method | Endpoint                         | Description               |
+| ------ | -------------------------------- | ------------------------- |
 | GET    | `/api/forum/questions`           | List all questions        |
 | POST   | `/api/forum/questions`           | Create a new question     |
 | GET    | `/api/forum/questions/:id`       | Get details of a question |
@@ -325,26 +325,26 @@ This repository includes:
 
 ### 📩 Instant Messaging (IM)
 
-| Method | Endpoint              | Description                 |
-|--------|------------------------|-----------------------------|
-| GET    | `/api/chat/messages`   | Fetch chat history          |
-| POST   | `/api/chat/messages`   | Send message to admin/user  |
+| Method | Endpoint             | Description                |
+| ------ | -------------------- | -------------------------- |
+| GET    | `/api/chat/messages` | Fetch chat history         |
+| POST   | `/api/chat/messages` | Send message to admin/user |
 
 ### 📊 Logs
 
-| Method | Endpoint             | Description              |
-|--------|----------------------|--------------------------|
+| Method | Endpoint             | Description                                |
+| ------ | -------------------- | ------------------------------------------ |
 | POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) |
 
 ### 🛠️ Admin
 
-| Method | Endpoint                                 | Description                          |
-|--------|-------------------------------------------|--------------------------------------|
-| POST   | `/api/admin/login`                        | Admin login                          |
-| GET    | `/api/admin/forum/questions`              | View all user questions              |
-| POST   | `/api/admin/forum/questions/:id/reply`    | Admin replies to a forum question    |
-| GET    | `/api/admin/chat/:user_id/messages`       | View chat with a specific user       |
-| POST   | `/api/admin/chat/:user_id/messages`       | Admin sends message to a user        |
+| Method | Endpoint                               | Description                       |
+| ------ | -------------------------------------- | --------------------------------- |
+| POST   | `/api/admin/login`                     | Admin login                       |
+| GET    | `/api/admin/forum/questions`           | View all user questions           |
+| POST   | `/api/admin/forum/questions/:id/reply` | Admin replies to a forum question |
+| GET    | `/api/admin/chat/:user_id/messages`    | View chat with a specific user    |
+| POST   | `/api/admin/chat/:user_id/messages`    | Admin sends message to a user     |
 
 ---
 
