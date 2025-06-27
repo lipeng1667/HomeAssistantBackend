@@ -22,6 +22,33 @@ const pool = require('../config/database');
 const config = require('../config');
 
 /**
+ * @description Middleware to restrict access to localhost only
+ * @function localhostOnly
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const localhostOnly = (req, res, next) => {
+  const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+  
+  // Check if the request is from localhost
+  const isLocalhost = clientIP === '127.0.0.1' ||
+    clientIP === '::1' ||
+    clientIP === 'localhost' ||
+    clientIP === '::ffff:127.0.0.1' || // IPv4-mapped IPv6
+    clientIP === '::ffff:127.0.0.1:10000'; // With port
+  
+  if (!isLocalhost) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Access denied. This endpoint is only accessible from localhost.'
+    });
+  }
+  
+  next();
+};
+
+/**
  * @description Middleware for user authentication
  * @async
  * @function authenticateUser
@@ -162,5 +189,6 @@ const authenticateAdmin = async (req, res, next) => {
 
 module.exports = {
   authenticateUser,
-  authenticateAdmin
+  authenticateAdmin,
+  localhostOnly
 }; 

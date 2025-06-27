@@ -31,6 +31,7 @@ const morgan = require('morgan')
 const rateLimit = require('express-rate-limit')
 const config = require('./config')
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler')
+const { localhostOnly } = require('./middleware/auth')
 
 // Import routes
 const authRoutes = require('./routes/auth')
@@ -69,7 +70,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/api/cli-stats', (req, res) => {
+app.get('/api/cli-stats', localhostOnly, (req, res) => {
   res.json({
     totalRequests: stats.total,
     perPath: stats.perPath,
@@ -119,7 +120,7 @@ app.use('/api/admin/login', authLimiter)
 app.use('/api', apiLimiter)
 
 // Routes
-app.use('/health', healthRoutes)
+app.use('/health', localhostOnly, healthRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/forum', forumRoutes)
 app.use('/api/chat', chatRoutes)
