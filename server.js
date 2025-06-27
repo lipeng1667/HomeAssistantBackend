@@ -32,6 +32,24 @@ const rateLimit = require('express-rate-limit')
 const config = require('./config')
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler')
 const { localhostOnly } = require('./middleware/auth')
+const fs = require('fs')
+const path = require('path')
+
+// Import Redis client and metrics service (ES modules)
+import('./config/redis.js').then(module => {
+  const redisClient = module.default
+  redisClient.connect().catch(console.error)
+})
+import('./services/metrics.js').then(module => {
+  global.metricsService = module.default
+})
+import('./middleware/metrics.js').then(module => {
+  global.metricsMiddleware = module.default
+})
+import('./middleware/redisRateLimit.js').then(module => {
+  global.redisRateLimit = module.default
+  global.slidingWindowRateLimit = module.slidingWindowRateLimit
+})
 
 // Import routes
 const authRoutes = require('./routes/auth')
@@ -43,40 +61,76 @@ const healthRoutes = require('./routes/health')
 
 const app = express();
 
+// Ensure logs directory exists
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+// Create access log stream
+const accessLogStream = fs.createWriteStream(
+  path.join(logsDir, 'access.log'),
+  { flags: 'a' } // Append mode
+);
+
+// Define internal/system endpoints that should be filtered out from logs
+const internalEndpoints = [
+  '/health',
+  '/health/db',
+  '/health/detailed',
+  '/api/cli-stats',
+  '/favicon.ico'
+];
+
+// Custom Morgan filter function to exclude internal endpoints
+const shouldLogRequest = (req) => {
+  const url = req.url.split('?')[0]; // Remove query parameters for matching
+  return !internalEndpoints.some(endpoint => url.startsWith(endpoint));
+};
+
 // Trust proxy headers for proper IP detection behind Nginx
 app.set('trust proxy', true);
 
-// === Simple Stats Middleware for CLI Dashboard ===
-const stats = {
-  total: 0,
-  perPath: {},
-  start: Date.now()
-};
-
+// === Redis-based Metrics System ===
+const serverStartTime = Date.now();
 let activeConnections = 0;
 
+// Use Redis metrics middleware when available
 app.use((req, res, next) => {
-  // Get the real client IP (works with and without Nginx)
-  const clientIP = req.ip;
-
-  // Skip counting requests from localhost (dashboard requests)
-  const isLocalhost = clientIP === '127.0.0.1' || clientIP === '::1' || clientIP === 'localhost';
-
-  if (!isLocalhost) {
-    stats.total++;
-    stats.perPath[req.path] = (stats.perPath[req.path] || 0) + 1;
+  if (global.metricsMiddleware) {
+    global.metricsMiddleware(req, res, next);
+  } else {
+    next();
   }
-
-  next();
 });
 
-app.get('/api/cli-stats', localhostOnly, (req, res) => {
-  res.json({
-    totalRequests: stats.total,
-    perPath: stats.perPath,
-    uptime: Math.round((Date.now() - stats.start) / 1000), // seconds
-    activeConnections
-  });
+app.get('/api/cli-stats', localhostOnly, async (req, res) => {
+  try {
+    if (global.metricsService) {
+      const metrics = await global.metricsService.getMetrics();
+      res.json({
+        ...metrics,
+        uptime: Math.round((Date.now() - serverStartTime) / 1000),
+        activeConnections,
+        serverStartTime: new Date(serverStartTime).toISOString()
+      });
+    } else {
+      // Fallback response when Redis is not available
+      res.json({
+        error: 'Metrics service not available',
+        uptime: Math.round((Date.now() - serverStartTime) / 1000),
+        activeConnections,
+        serverStartTime: new Date(serverStartTime).toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Error getting metrics:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve metrics',
+      uptime: Math.round((Date.now() - serverStartTime) / 1000),
+      activeConnections
+    });
+  }
 });
 
 // Security middleware
@@ -94,30 +148,69 @@ app.use(helmet({
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
-app.use(morgan(config.logging.format))
+// Apply Morgan logging with filtering
+app.use(morgan('combined', {
+  stream: accessLogStream,
+  skip: (req) => !shouldLogRequest(req)
+}))
+// app.use(morgan('dev', {
+//   skip: (req) => !shouldLogRequest(req)
+// }))
 
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.maxRequests,
-  message: {
-    status: 'error',
-    message: 'Too many requests, please try again later'
+// Rate limiting - Redis-backed with fallback to express-rate-limit
+const createApiLimiter = () => {
+  if (global.redisRateLimit) {
+    return global.redisRateLimit({
+      windowMs: config.rateLimit.windowMs,
+      max: config.rateLimit.maxRequests,
+      message: {
+        status: 'error',
+        message: 'Too many requests, please try again later'
+      }
+    })
   }
-})
+  // Fallback to express-rate-limit
+  return rateLimit({
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.maxRequests,
+    message: {
+      status: 'error',
+      message: 'Too many requests, please try again later'
+    }
+  })
+}
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: config.rateLimit.maxAuthAttempts,
-  message: {
-    status: 'error',
-    message: 'Too many login attempts, please try again later'
+const createAuthLimiter = () => {
+  if (global.slidingWindowRateLimit) {
+    return global.slidingWindowRateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: config.rateLimit.maxAuthAttempts,
+      message: {
+        status: 'error',
+        message: 'Too many login attempts, please try again later'
+      }
+    })
   }
-})
+  // Fallback to express-rate-limit
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: config.rateLimit.maxAuthAttempts,
+    message: {
+      status: 'error',
+      message: 'Too many login attempts, please try again later'
+    }
+  })
+}
 
-app.use('/api/auth/login', authLimiter)
-app.use('/api/admin/login', authLimiter)
-app.use('/api', apiLimiter)
+// Apply rate limiting with Redis-backed limiters when available
+setTimeout(() => {
+  const apiLimiter = createApiLimiter()
+  const authLimiter = createAuthLimiter()
+  
+  app.use('/api/auth/login', authLimiter)
+  app.use('/api/admin/login', authLimiter)
+  app.use('/api', apiLimiter)
+}, 1000) // Small delay to ensure Redis modules are loaded
 
 // Routes
 app.use('/health', localhostOnly, healthRoutes)

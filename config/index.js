@@ -56,6 +56,16 @@ const config = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     format: process.env.LOG_FORMAT || 'combined'
+  },
+
+  redis: {
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || null,
+    db: parseInt(process.env.REDIS_DB, 10) || 0,
+    keyPrefix: process.env.REDIS_KEY_PREFIX || 'ha:',
+    retryDelayOnFailover: parseInt(process.env.REDIS_RETRY_DELAY, 10) || 100,
+    maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES, 10) || 3
   }
 }
 
