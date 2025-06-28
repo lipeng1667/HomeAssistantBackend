@@ -1,20 +1,50 @@
 /**
  * @file middleware/redisRateLimit.js
- * @description Redis-backed distributed rate limiting middleware
+ * @description Redis-backed distributed rate limiting middleware for PM2 cluster coordination
  * @author Michael Lee
  * @created 2025-06-27
+ * @modified 2025-06-27
+ * 
+ * This module provides distributed rate limiting using Redis as the shared state store,
+ * enabling consistent rate limiting across multiple PM2 instances. It offers both
+ * fixed window and sliding window algorithms with automatic fallback to in-memory limiting.
+ * 
+ * Modification Log:
+ * - 2025-06-27: Initial implementation with fixed window rate limiting
+ * - 2025-06-27: Added sliding window rate limiting for more precise control
+ * - 2025-06-27: Enhanced documentation and error handling
+ * 
+ * Functions:
+ * - redisRateLimit(options): Factory for fixed window rate limiting middleware
+ * - slidingWindowRateLimit(options): Factory for sliding window rate limiting middleware
+ * 
+ * Dependencies:
+ * - config/redis.js: Redis client for distributed state management
+ * 
+ * Rate Limiting Strategies:
+ * - Fixed Window: Resets counters at fixed time intervals
+ * - Sliding Window: Maintains rolling window for more accurate limiting
+ * 
+ * Redis Key Schema:
+ * - ha:rate_limit:{identifier} - Fixed window counters with scores as timestamps
+ * - ha:sliding_limit:{identifier} - Sliding window entries with timestamp scores
  */
 
 import redisClient from '../config/redis.js'
 
 /**
- * Redis-based rate limiting middleware factory
- * @param {Object} options - Rate limiting options
- * @param {number} options.windowMs - Time window in milliseconds
- * @param {number} options.max - Maximum requests per window
- * @param {string} options.keyGenerator - Function to generate rate limit key
- * @param {Object} options.message - Error message object
- * @returns {Function} Express middleware function
+ * Factory function for Redis-based fixed window rate limiting middleware
+ * @param {Object} options - Configuration object for rate limiting behavior
+ * @param {number} [options.windowMs=900000] - Time window in milliseconds (default: 15 minutes)
+ * @param {number} [options.max=100] - Maximum requests allowed per window
+ * @param {Function} [options.keyGenerator] - Function to generate unique rate limit key from request
+ * @param {Object} [options.message] - Error response object when rate limit exceeded
+ * @returns {Function} Express middleware function for rate limiting
+ * @sideEffects Creates Redis entries with TTL, modifies HTTP response headers
+ * @throws Does not throw - falls back gracefully when Redis unavailable
+ * @example
+ * const limiter = redisRateLimit({ windowMs: 60000, max: 10 })
+ * app.use('/api', limiter)
  */
 const redisRateLimit = (options = {}) => {
   const {
@@ -88,9 +118,18 @@ const redisRateLimit = (options = {}) => {
 }
 
 /**
- * Sliding window rate limiter with more precise control
- * @param {Object} options - Rate limiting options
- * @returns {Function} Express middleware function
+ * Factory function for Redis-based sliding window rate limiting middleware
+ * @param {Object} options - Configuration object for sliding window rate limiting
+ * @param {number} [options.windowMs=900000] - Rolling time window in milliseconds (default: 15 minutes)
+ * @param {number} [options.max=100] - Maximum requests allowed in sliding window
+ * @param {Function} [options.keyGenerator] - Function to generate unique rate limit key from request
+ * @param {Object} [options.message] - Error response object when rate limit exceeded
+ * @returns {Function} Express middleware function for precise rate limiting
+ * @sideEffects Creates Redis sorted sets, removes expired entries, modifies response headers
+ * @throws Does not throw - falls back gracefully when Redis unavailable
+ * @example
+ * const authLimiter = slidingWindowRateLimit({ windowMs: 300000, max: 5 })
+ * app.use('/api/auth/login', authLimiter)
  */
 const slidingWindowRateLimit = (options = {}) => {
   const {

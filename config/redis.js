@@ -1,8 +1,28 @@
 /**
  * @file config/redis.js
- * @description Redis connection and client management
+ * @description Redis connection and client management for distributed metrics and caching
  * @author Michael Lee
  * @created 2025-06-27
+ * @modified 2025-06-27
+ * 
+ * This module provides a centralized Redis client with connection pooling,
+ * automatic reconnection strategies, and error handling for the Home Assistant
+ * backend. It supports distributed metrics collection across PM2 cluster instances.
+ * 
+ * Modification Log:
+ * - 2025-06-27: Initial implementation with connection management and key prefixing
+ * - 2025-06-27: Added comprehensive documentation and error handling
+ * 
+ * Functions:
+ * - connect(): Establishes Redis connection with retry logic
+ * - getClient(): Returns active Redis client instance
+ * - isReady(): Checks Redis connection status
+ * - disconnect(): Gracefully closes Redis connection
+ * - key(string): Generates prefixed Redis keys
+ * 
+ * Dependencies:
+ * - redis: Node.js Redis client library
+ * - config/index.js: Application configuration
  */
 
 import { createClient } from 'redis'
@@ -15,8 +35,10 @@ class RedisClient {
   }
 
   /**
-   * Initialize Redis connection
-   * @returns {Promise<void>}
+   * Initialize Redis connection with automatic reconnection strategy
+   * @returns {Promise<Object>} Promise resolving to Redis client instance
+   * @throws {Error} When Redis connection fails after retry attempts
+   * @sideEffects Establishes persistent Redis connection, sets up event listeners
    */
   async connect() {
     try {
@@ -59,8 +81,10 @@ class RedisClient {
   }
 
   /**
-   * Get Redis client instance
-   * @returns {Object} Redis client
+   * Get active Redis client instance
+   * @returns {Object} Redis client instance for database operations
+   * @throws {Error} When Redis client is not connected or unavailable
+   * @sideEffects None - read-only operation
    */
   getClient() {
     if (!this.client || !this.isConnected) {
@@ -70,16 +94,18 @@ class RedisClient {
   }
 
   /**
-   * Check if Redis is connected
-   * @returns {boolean}
+   * Check if Redis connection is ready for operations
+   * @returns {boolean} True if Redis is connected and ready, false otherwise
+   * @sideEffects None - read-only status check
    */
   isReady() {
     return this.isConnected && this.client?.isReady
   }
 
   /**
-   * Gracefully disconnect from Redis
-   * @returns {Promise<void>}
+   * Gracefully disconnect from Redis server
+   * @returns {Promise<void>} Promise resolving when disconnection is complete
+   * @sideEffects Closes Redis connection, cleans up event listeners
    */
   async disconnect() {
     if (this.client) {
@@ -89,9 +115,11 @@ class RedisClient {
   }
 
   /**
-   * Generate prefixed key
-   * @param {string} key - Key name
-   * @returns {string} Prefixed key
+   * Generate prefixed Redis key for namespace isolation
+   * @param {string} key - Base key name to be prefixed
+   * @returns {string} Redis key with application prefix applied
+   * @sideEffects None - pure function for key generation
+   * @example key('users:123') => 'ha:users:123'
    */
   key(key) {
     return `${config.redis.keyPrefix}${key}`

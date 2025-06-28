@@ -1,25 +1,46 @@
 /**
  * @file config/index.js
- * @description Centralized configuration management with validation
+ * @description Centralized configuration management with validation and security checks
  * @author Michael Lee
  * @created 2025-06-26
- * @modified 2025-06-26
+ * @modified 2025-06-27
  * 
  * This file provides centralized configuration management for the entire
- * application with environment variable validation and security checks.
+ * application with environment variable validation, security checks, and
+ * Redis configuration for distributed metrics and rate limiting.
+ * 
+ * Modification Log:
+ * - 2025-06-26: Initial implementation with JWT and database configuration
+ * - 2025-06-27: Added Redis configuration for distributed metrics system
+ * - 2025-06-27: Enhanced documentation with comprehensive environment variables
+ * 
+ * Functions:
+ * - Configuration object factory with validation
+ * - Environment variable validation and security checks
+ * - JWT secret complexity validation
  * 
  * Dependencies:
- * - dotenv: Environment variable loading
+ * - dotenv: Environment variable loading (loaded in server.js)
  * 
  * Environment Variables:
- * - JWT_SECRET: Secret key for user JWT tokens (required, 32+ chars)
- * - JWT_ADMIN_SECRET: Secret key for admin JWT tokens (required, 32+ chars)
- * - DB_HOST: Database host (required)
- * - DB_USER: Database user (required)
- * - DB_PASSWORD: Database password (required)
- * - DB_NAME: Database name (required)
+ * Required:
+ * - JWT_SECRET: Secret key for user JWT tokens (32+ chars)
+ * - JWT_ADMIN_SECRET: Secret key for admin JWT tokens (32+ chars)
+ * - DB_HOST: Database host address
+ * - DB_USER: Database username
+ * - DB_PASSWORD: Database password
+ * - DB_NAME: Database name
+ * 
+ * Optional:
  * - PORT: Server port (default: 10000)
  * - NODE_ENV: Environment mode (default: development)
+ * - HOST: Server bind address (default: 0.0.0.0)
+ * - REDIS_HOST: Redis server host (default: 127.0.0.1)
+ * - REDIS_PORT: Redis server port (default: 6379)
+ * - REDIS_PASSWORD: Redis authentication password
+ * - REDIS_DB: Redis database number (default: 0)
+ * - REDIS_KEY_PREFIX: Redis key namespace prefix (default: ha:)
+ * - Rate limiting and logging configuration variables
  */
 
 const config = {

@@ -2,21 +2,35 @@
 
 /**
  * @file dashboard.mjs
- * @description CLI Dashboard for Home Assistant Backend Management
+ * @description CLI Dashboard for Home Assistant Backend Management with Redis metrics
  * @author Michael Lee
  * @created 2025-06-17
- * @modified 2025-06-17
+ * @modified 2025-06-27
  * 
  * This file provides a command-line interface for monitoring and managing
- * the Home Assistant backend application. It includes real-time monitoring,
- * log viewing, and basic management operations.
+ * the Home Assistant backend application. It includes real-time monitoring
+ * with Redis-based distributed metrics, log viewing, and management operations.
+ * 
+ * Modification Log:
+ * - 2025-06-17: Initial CLI dashboard implementation
+ * - 2025-06-27: Updated to display Redis-based cluster metrics
+ * - 2025-06-27: Added connection tracking and request speed monitoring
+ * 
+ * Functions:
+ * - displayHeader(): Show dashboard title and branding
+ * - displayServerStats(stats): Display Redis-based server metrics
+ * - displayConnectionStats(stats): Show HTTP connection metrics
+ * - displayAPIStats(stats): Display endpoint and error statistics
+ * - displaySpeedStats(stats): Show request processing speed metrics
+ * - getServerStats(): Fetch metrics from /api/cli-stats endpoint
+ * - Real-time monitoring and PM2 management functions
  * 
  * Dependencies:
  * - chalk: For colored terminal output
  * - inquirer: For interactive prompts
  * - ora: For loading spinners
  * - boxen: For bordered boxes
- * - axios: For API requests
+ * - axios: For API requests to Redis-backed endpoints
  * - pm2: For process management
  */
 
@@ -133,16 +147,74 @@ function displayServerStats(stats) {
   }
 
   const data = stats.data;
+  const total = data.total || {};
+  const speed = data.speed || {};
+  
   const info = [
-    `📊 Total Requests: ${chalk.cyan(data.totalRequests)}`,
-    `🔗 Active Connections: ${chalk.yellow(data.activeConnections)}`,
-    `⏱️  Server Uptime: ${chalk.green(formatUptime(data.uptime))}`,
-    `📈 Requests/sec: ${chalk.magenta((data.totalRequests / Math.max(data.uptime, 1)).toFixed(2))}`
+    `📊 Total Requests: ${chalk.cyan(total.requests || 0)}`,
+    `✅ Accepted Requests: ${chalk.green(total.accepted || 0)}`,
+    `❌ Error Requests: ${chalk.red(total.errors || 0)}`,
+    `📉 Error Rate: ${chalk.yellow(total.errorRate || '0.00')}%`,
+    `⏱️  Server Uptime: ${chalk.green(formatUptime(data.uptime || 0))}`
   ];
 
   console.log(boxen(
     info.join('\n'),
     { padding: 1, borderColor: 'cyan', title: 'Server Statistics' }
+  ));
+}
+
+function displayConnectionStats(stats) {
+  if (!stats || stats.status === 'offline') {
+    return;
+  }
+
+  const data = stats.data;
+  const connections = data.connections || {};
+  
+  const info = [
+    `🔗 Active Connections: ${chalk.cyan(connections.current || 0)}`,
+    `📈 Max Since Startup: ${chalk.yellow(connections.maxSinceStartup || 0)}`,
+    `🖥️  Local Instance Connections: ${chalk.gray(data.activeConnections || 0)}`
+  ];
+
+  console.log(boxen(
+    info.join('\n'),
+    {
+      title: chalk.blue('HTTP Connections (Cluster-wide)'),
+      titleAlignment: 'center',
+      padding: 1,
+      margin: { top: 1 },
+      borderStyle: 'round',
+      borderColor: 'blue'
+    }
+  ));
+}
+
+function displaySpeedStats(stats) {
+  if (!stats || stats.status === 'offline') {
+    return;
+  }
+
+  const data = stats.data;
+  const speed = data.speed || {};
+  
+  const info = [
+    `⚡ Current Speed: ${chalk.cyan(speed.current || 0)} req/sec`,
+    `🚀 Max Speed: ${chalk.yellow(speed.maxSinceStartup || 0)} req/sec`,
+    `📊 Average Speed: ${chalk.magenta(data.uptime > 0 ? ((data.total?.requests || 0) / data.uptime).toFixed(2) : '0.00')} req/sec`
+  ];
+
+  console.log(boxen(
+    info.join('\n'),
+    {
+      title: chalk.green('Request Processing Speed'),
+      titleAlignment: 'center',
+      padding: 1,
+      margin: { top: 1 },
+      borderStyle: 'round',
+      borderColor: 'green'
+    }
   ));
 }
 
@@ -152,16 +224,17 @@ function displayAPIStats(stats) {
   }
 
   const data = stats.data;
-  const topEndpoints = Object.entries(data.perPath)
-    .sort(([, a], [, b]) => b - a)
+  const endpoints = data.endpoints || {};
+  const topEndpoints = Object.entries(endpoints)
+    .sort(([, a], [, b]) => (b.requests || 0) - (a.requests || 0))
     .slice(0, 5);
 
   if (topEndpoints.length === 0) {
     return;
   }
 
-  const endpointStats = topEndpoints.map(([path, count]) =>
-    `${chalk.gray(path)}: ${chalk.yellow(count)}`
+  const endpointStats = topEndpoints.map(([path, stats]) =>
+    `${chalk.gray(path)}: ${chalk.yellow(stats.requests || 0)} (${chalk.red(stats.errorRate || '0.00')}% errors)`
   ).join('\n');
 
   console.log(boxen(
@@ -246,6 +319,8 @@ async function viewStatus() {
     displayStatus(status);
 
     displayServerStats(serverStats);
+    displayConnectionStats(serverStats);
+    displaySpeedStats(serverStats);
     displayAPIStats(serverStats);
 
     if (process) {
@@ -280,6 +355,8 @@ async function realtimeMonitor() {
       displayStatus(status);
 
       displayServerStats(serverStats);
+      displayConnectionStats(serverStats);
+      displaySpeedStats(serverStats);
       displayAPIStats(serverStats);
 
       if (process) {

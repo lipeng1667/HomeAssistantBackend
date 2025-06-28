@@ -1,26 +1,58 @@
 /**
  * @file server.js
- * @description Main server file for the Home Assistant Platform Backend
+ * @description Main Express server with Redis-based distributed metrics and rate limiting
  * @author Michael Lee
  * @created 2025-06-17
- * @modified 2025-06-17
+ * @modified 2025-06-27
  * 
- * This file sets up the Express server, configures middleware,
+ * This file sets up the Express server with comprehensive middleware stack,
+ * Redis-based distributed metrics collection, cluster-aware rate limiting,
  * and organizes all API routes for the Home Assistant Platform.
+ * 
+ * Modification Log:
+ * - 2025-06-17: Initial Express server setup with basic middleware
+ * - 2025-06-27: Added Redis-based metrics system for PM2 cluster coordination
+ * - 2025-06-27: Implemented distributed rate limiting with Redis backend
+ * - 2025-06-27: Enhanced /api/cli-stats endpoint with comprehensive metrics
+ * - 2025-06-27: Added graceful fallbacks for Redis unavailability
+ * 
+ * Functions:
+ * - Express app configuration with security middleware
+ * - Redis metrics middleware integration
+ * - Distributed rate limiting setup with fallbacks
+ * - System endpoints for dashboard monitoring
+ * - Connection tracking and logging
  * 
  * Dependencies:
  * - express: Web framework
  * - cors: Cross-origin resource sharing
  * - helmet: Security headers
- * - morgan: HTTP request logging
- * - express-rate-limit: Rate limiting
+ * - morgan: HTTP request logging with file output
+ * - express-rate-limit: Fallback rate limiting
+ * - config/redis.js: Redis client for distributed operations
+ * - services/metrics.js: Redis-based metrics aggregation
+ * - middleware/metrics.js: Automatic request metrics collection
+ * - middleware/redisRateLimit.js: Distributed rate limiting
  * 
  * Routes:
- * - /api/auth: Authentication routes
- * - /api/forum: Forum routes
- * - /api/chat: Chat routes
- * - /api/logs: Activity logging routes
- * - /api/admin: Admin routes
+ * Business Logic Routes:
+ * - /api/auth: User authentication and authorization
+ * - /api/forum: Forum questions and replies
+ * - /api/chat: Real-time messaging between users and admins
+ * - /api/logs: User activity logging and audit trails
+ * - /api/admin: Admin-only management endpoints
+ * 
+ * System Routes (localhost only):
+ * - /health: Basic health check endpoint
+ * - /health/db: Database connectivity check
+ * - /health/detailed: Comprehensive system status
+ * - /api/cli-stats: Dashboard metrics endpoint with Redis aggregation
+ * 
+ * Redis Integration:
+ * - Distributed metrics across PM2 instances
+ * - Cluster-aware rate limiting
+ * - Time-series data for performance analytics
+ * - Automatic fallback when Redis unavailable
  */
 
 require('dotenv').config()
@@ -232,7 +264,7 @@ const server = app.listen(config.server.port, config.server.host, () => {
   console.log(`🔗 Health check: http://${config.server.host}:${config.server.port}/health`)
 })
 
-// Track active HTTP connections
+// Track active HTTP connections with Redis cluster-wide aggregation
 server.on('connection', (socket) => {
   // Get the remote address of the connection
   const remoteAddress = socket.remoteAddress;
@@ -245,8 +277,46 @@ server.on('connection', (socket) => {
 
   if (!isLocalhost) {
     activeConnections++;
+    
+    // Update Redis cluster-wide connection count
+    if (global.metricsService) {
+      global.metricsService.incrementConnections().catch(console.error);
+    }
+    
     socket.on('close', () => {
       activeConnections--;
+      
+      // Update Redis cluster-wide connection count
+      if (global.metricsService) {
+        global.metricsService.decrementConnections().catch(console.error);
+      }
     });
   }
 });
+
+// Calculate and update request speed every 5 seconds
+let lastRequestCount = 0;
+let lastSpeedUpdate = Date.now();
+
+setInterval(async () => {
+  if (global.metricsService) {
+    try {
+      const metrics = await global.metricsService.getMetrics();
+      const currentRequests = metrics.total?.requests || 0;
+      const currentTime = Date.now();
+      
+      const timeDiff = (currentTime - lastSpeedUpdate) / 1000; // seconds
+      const requestDiff = currentRequests - lastRequestCount;
+      
+      if (timeDiff > 0) {
+        const currentSpeed = requestDiff / timeDiff;
+        await global.metricsService.updateRequestSpeed(Math.round(currentSpeed * 100) / 100);
+      }
+      
+      lastRequestCount = currentRequests;
+      lastSpeedUpdate = currentTime;
+    } catch (error) {
+      console.error('Error calculating request speed:', error);
+    }
+  }
+}, 5000); // Update every 5 seconds
