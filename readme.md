@@ -4,20 +4,25 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 
 ## Features
 
-- User Authentication (Anonymous, device-based login)
-- Forum System (Questions and Replies)
-- Instant Messaging System (User-to-Admin)
-- Activity Logging
-- Admin Panel
-- Secure API Endpoints
-- Rate Limiting
-- Database Optimization
+- **User Authentication** (Anonymous, device-based login)
+- **Forum System** (Questions and Replies)
+- **Instant Messaging System** (User-to-Admin)
+- **Activity Logging** with comprehensive audit trails
+- **Admin Panel** with role-based access control
+- **Secure API Endpoints** with JWT authentication
+- **Redis-based Distributed Metrics** across PM2 cluster instances
+- **Advanced Rate Limiting** with Redis-backed cluster coordination
+- **Real-time Performance Monitoring** with connection tracking
+- **CLI Dashboard** for comprehensive system monitoring
+- **Database Optimization** with connection pooling
 
 ## Prerequisites
 
-- Node.js (v14 or higher)
-- MariaDB (v10.5 or higher)
-- npm or yarn
+- **Node.js** (v14 or higher)
+- **MariaDB** (v10.5 or higher) 
+- **Redis** (v6.0 or higher) - for distributed metrics and rate limiting
+- **PM2** (recommended for production) - for process management
+- **npm** or yarn
 
 ## Local Development Setup
 
@@ -46,6 +51,7 @@ cp .env.example .env
 # Server Configuration
 PORT=10000
 NODE_ENV=development
+HOST=0.0.0.0
 
 # Database Configuration
 DB_HOST=localhost
@@ -53,29 +59,46 @@ DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_NAME=home_assistant
 
-# JWT Configuration
-JWT_SECRET=your_jwt_secret
-JWT_ADMIN_SECRET=your_admin_jwt_secret
+# JWT Configuration (32+ characters required)
+JWT_SECRET=your_very_secure_jwt_secret_32chars_min
+JWT_ADMIN_SECRET=your_very_secure_admin_jwt_secret_32chars_min
+
+# Redis Configuration (Optional - will use defaults if not set)
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+REDIS_KEY_PREFIX=ha:
 
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_AUTH_MAX=5
+
+# Logging
+LOG_LEVEL=info
+LOG_FORMAT=combined
 ```
 
-5. Install and start MariaDB:
+5. Install and start MariaDB and Redis:
 
 ```bash
 # For macOS
-brew install mariadb
+brew install mariadb redis
 brew services start mariadb
+brew services start redis
 
 # For Ubuntu/Debian
 sudo apt update
-sudo apt install mariadb-server
+sudo apt install mariadb-server redis-server
 sudo systemctl start mariadb
+sudo systemctl start redis-server
+sudo systemctl enable mariadb
+sudo systemctl enable redis-server
 
 # For Windows
-# Download and install from https://mariadb.org/download/
+# Download MariaDB from https://mariadb.org/download/
+# Download Redis from https://redis.io/download
 ```
 
 6. Set up the database:
@@ -83,14 +106,14 @@ sudo systemctl start mariadb
 ```bash
 # Create database and user
 sudo mariadb
-CREATE DATABASE home_assistant;
+CREATE DATABASE HomeAssistant;
 CREATE USER 'your_db_user'@'localhost' IDENTIFIED BY 'your_db_password';
-GRANT ALL PRIVILEGES ON home_assistant.* TO 'your_db_user'@'localhost';
+GRANT ALL PRIVILEGES ON HomeAssistant.* TO 'your_db_user'@'localhost';
 FLUSH PRIVILEGES;
 exit;
 
 # Import schema
-mariadb -u your_db_user -p home_assistant < database.sql
+mariadb -u your_db_user -p HomeAssistant < database.sql
 ```
 
 7. Start the development server:
@@ -107,26 +130,34 @@ npm run dev
 ssh user@your-server-ip
 ```
 
-2. Install Node.js and MariaDB if not already installed:
+2. Install Node.js, MariaDB, and Redis if not already installed:
 
 ```bash
 # For Ubuntu/Debian
 sudo apt update
-sudo apt install nodejs npm mariadb-server
+sudo apt install nodejs npm mariadb-server redis-server
+sudo systemctl enable mariadb redis-server
 
 # For CentOS/RHEL
-sudo yum install nodejs npm mariadb-server
+sudo yum install nodejs npm mariadb-server redis
+sudo systemctl enable mariadb redis
 ```
 
-3. Start and secure MariaDB:
+3. Start and secure MariaDB and Redis:
 
 ```bash
-# Start MariaDB service
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
+# Start services
+sudo systemctl start mariadb redis-server
+sudo systemctl enable mariadb redis-server
 
-# Run security script
+# Secure MariaDB
 sudo mysql-secure-installation
+
+# Configure Redis (optional, for production)
+sudo nano /etc/redis/redis.conf
+# Set: requirepass your_redis_password
+# Set: bind 127.0.0.1
+sudo systemctl restart redis-server
 ```
 
 4. Clone the repository:
@@ -202,12 +233,16 @@ The project includes a comprehensive CLI dashboard for monitoring and managing t
 
 ### Features
 
-- 📊 Real-time application status monitoring
-- 📋 Log viewing (combined, output, error, PM2)
-- 🔄 Application lifecycle management (start/stop/restart)
-- 📈 Performance monitoring with live updates
-- 🗑️ Log management and clearing
-- 🔧 Configuration viewing
+- 📊 **Real-time application status monitoring** with Redis-based cluster metrics
+- 🔗 **HTTP connection tracking** across all PM2 instances
+- ⚡ **Request processing speed** monitoring (current and maximum)
+- 📈 **Performance analytics** with request acceptance rates and error tracking
+- 📋 **Log viewing** (combined, output, error, PM2)
+- 🔄 **Application lifecycle management** (start/stop/restart)
+- 🗑️ **Log management** and clearing
+- 🔧 **Configuration viewing**
+- 📊 **Endpoint statistics** with error rates per API route
+- 🕐 **Time-series data** with hourly request aggregation
 
 ### Usage
 
@@ -224,11 +259,13 @@ npm run dashboard
 ```
 
 3. Use the interactive menu to:
-   - View application status and health checks
-   - Monitor real-time performance metrics
-   - View and manage logs
-   - Control application lifecycle
-   - View configuration settings
+   - **View cluster-wide application status** and health checks
+   - **Monitor real-time performance metrics** (connections, speed, error rates)
+   - **Analyze endpoint performance** with error tracking
+   - **View distributed metrics** across all PM2 instances
+   - **View and manage logs** with filtering
+   - **Control application lifecycle** with PM2 integration
+   - **View configuration settings** and Redis status
 
 ### Dashboard Commands
 
@@ -254,13 +291,23 @@ jsdoc -c jsdoc.json
 
 ## Security Considerations
 
-1. Always use HTTPS in production
-2. Keep your JWT secrets secure and complex
-3. Regularly update dependencies
-4. Monitor rate limiting and adjust as needed
-5. Keep your MariaDB server secure and updated
-6. Regularly backup your database
-7. Use strong passwords for database users
+1. **Always use HTTPS in production**
+2. **Keep your JWT secrets secure and complex** (32+ characters required)
+3. **Secure your Redis instance** with authentication and network restrictions
+4. **Regularly update dependencies** and security patches
+5. **Monitor rate limiting** and adjust thresholds as needed
+6. **Keep MariaDB and Redis servers secure** and updated
+7. **Regularly backup your database** and Redis data if persistence is enabled
+8. **Use strong passwords** for database and Redis authentication
+9. **Implement network firewalls** to restrict database and Redis access
+10. **Monitor application metrics** for unusual patterns or attacks
+
+### Redis Security
+
+- Use Redis password authentication in production
+- Bind Redis to localhost or private networks only
+- Consider Redis ACLs for fine-grained access control
+- Monitor Redis memory usage and set appropriate limits
 
 ## Contributing
 
@@ -363,11 +410,36 @@ This repository includes:
 - Use Postman or Swagger for API testing
 - Use `.env` file to manage secrets (JWT keys, DB credentials)
 
+## 🔧 Redis Metrics Architecture
+
+This application uses Redis for distributed metrics collection across PM2 cluster instances:
+
+### Key Benefits
+- **Cluster-wide visibility**: Metrics aggregated across all PM2 instances
+- **Real-time performance monitoring**: Connection tracking, request speeds, error rates
+- **Persistent metrics**: Data survives server restarts and deployments
+- **Scalable architecture**: Supports horizontal scaling with consistent metrics
+
+### Metrics Collected
+- **HTTP Connections**: Current active connections and maximum since startup
+- **Request Processing**: Total, accepted, and error requests with rates
+- **Performance Speed**: Current and maximum requests per second
+- **Endpoint Analytics**: Per-route request counts and error rates
+- **Time-series Data**: Hourly aggregations for trending analysis
+- **Response Times**: Percentile calculations for performance analysis
+
+### Redis Key Schema
+See `redis-schema.md` for complete documentation of Redis keys and data structures.
+
 ---
 
 ## 📌 TODO
 
-- [ ] Rate limiting and abuse prevention
-- [x] Rate limiting and abuse prevention
-- [ ] Admin dashboard UI
-- [ ] WebSocket support for real-time IM
+- [x] **Rate limiting and abuse prevention** (Redis-based distributed)
+- [x] **Real-time metrics collection** (Redis cluster-wide)
+- [x] **Performance monitoring dashboard** (CLI with comprehensive stats)
+- [ ] **Admin dashboard UI** (Web-based interface)
+- [ ] **WebSocket support** for real-time IM
+- [ ] **Redis persistence configuration** for production
+- [ ] **Grafana integration** for advanced analytics
+- [ ] **Alert system** for performance thresholds
