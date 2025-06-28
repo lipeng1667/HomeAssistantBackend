@@ -45,7 +45,7 @@
  * - ha:errors:total - Global error counter
  */
 
-import redisClient from '../config/redis.js'
+const redisClient = require('../config/redis.js')
 
 class MetricsService {
   constructor() {
@@ -432,4 +432,4 @@ class MetricsService {
   }
 }
 
-export default new MetricsService()
+module.exports = new MetricsService()

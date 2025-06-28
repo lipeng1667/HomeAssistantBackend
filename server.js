@@ -67,21 +67,20 @@ const { localhostOnly } = require('./middleware/auth')
 const fs = require('fs')
 const path = require('path')
 
-// Import Redis client and metrics service (ES modules)
-import('./config/redis.js').then(module => {
-  const redisClient = module.default
-  redisClient.connect().catch(console.error)
-})
-import('./services/metrics.js').then(module => {
-  global.metricsService = module.default
-})
-import('./middleware/metrics.js').then(module => {
-  global.metricsMiddleware = module.default
-})
-import('./middleware/redisRateLimit.js').then(module => {
-  global.redisRateLimit = module.default
-  global.slidingWindowRateLimit = module.slidingWindowRateLimit
-})
+// Import Redis client and metrics service (CommonJS)
+const redisClient = require('./config/redis')
+const metricsService = require('./services/metrics')
+const metricsMiddleware = require('./middleware/metrics')
+const { redisRateLimit, slidingWindowRateLimit } = require('./middleware/redisRateLimit')
+
+// Initialize Redis connection
+redisClient.connect().catch(console.error)
+
+// Set global references for middleware access
+global.metricsService = metricsService
+global.metricsMiddleware = metricsMiddleware
+global.redisRateLimit = redisRateLimit
+global.slidingWindowRateLimit = slidingWindowRateLimit
 
 // Import routes
 const authRoutes = require('./routes/auth')
@@ -234,15 +233,13 @@ const createAuthLimiter = () => {
   })
 }
 
-// Apply rate limiting with Redis-backed limiters when available
-setTimeout(() => {
-  const apiLimiter = createApiLimiter()
-  const authLimiter = createAuthLimiter()
-  
-  app.use('/api/auth/login', authLimiter)
-  app.use('/api/admin/login', authLimiter)
-  app.use('/api', apiLimiter)
-}, 1000) // Small delay to ensure Redis modules are loaded
+// Apply rate limiting with Redis-backed limiters
+const apiLimiter = createApiLimiter()
+const authLimiter = createAuthLimiter()
+
+app.use('/api/auth/login', authLimiter)
+app.use('/api/admin/login', authLimiter)
+app.use('/api', apiLimiter)
 
 // Routes
 app.use('/health', localhostOnly, healthRoutes)

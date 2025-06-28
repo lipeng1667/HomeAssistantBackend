@@ -25,8 +25,8 @@
  * - config/index.js: Application configuration
  */
 
-import { createClient } from 'redis'
-import config from './index.js'
+const { createClient } = require('redis')
+const config = require('./index.js')
 
 class RedisClient {
   constructor() {
@@ -126,4 +126,4 @@ class RedisClient {
   }
 }
 
-export default new RedisClient()
+module.exports = new RedisClient()

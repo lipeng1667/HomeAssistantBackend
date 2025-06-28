@@ -30,7 +30,7 @@
  * - ha:sliding_limit:{identifier} - Sliding window entries with timestamp scores
  */
 
-import redisClient from '../config/redis.js'
+const redisClient = require('../config/redis.js')
 
 /**
  * Factory function for Redis-based fixed window rate limiting middleware
@@ -202,5 +202,8 @@ const slidingWindowRateLimit = (options = {}) => {
   }
 }
 
-export { redisRateLimit, slidingWindowRateLimit }
-export default redisRateLimit
+module.exports = {
+  redisRateLimit,
+  slidingWindowRateLimit,
+  default: redisRateLimit
+}

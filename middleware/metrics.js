@@ -27,7 +27,7 @@
  * - Automatically tracks error rates for 4xx/5xx responses
  */
 
-import metricsService from '../services/metrics.js'
+const metricsService = require('../services/metrics.js')
 
 /**
  * Express middleware for automatic HTTP request metrics collection
@@ -81,4 +81,4 @@ const metricsMiddleware = (req, res, next) => {
   next()
 }
 
-export default metricsMiddleware
+module.exports = metricsMiddleware
