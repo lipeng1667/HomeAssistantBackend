@@ -33,6 +33,7 @@ rsync -av --exclude='node_modules' \
          --exclude='logs' \
          --exclude='*.log' \
          --exclude='.claude_code_rules.md' \
+         --exclude='.claude' \
          --exclude='CLAUDE.md' \
          --exclude='DEPLOYMENT.md' \
          --exclude='.gitignore' \

@@ -19,7 +19,7 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 ## Prerequisites
 
 - **Node.js** (v14 or higher)
-- **MariaDB** (v10.5 or higher) 
+- **MariaDB** (v10.5 or higher)
 - **Redis** (v6.0 or higher) - for distributed metrics and rate limiting
 - **PM2** (recommended for production) - for process management
 - **npm** or yarn
@@ -415,12 +415,14 @@ This repository includes:
 This application uses Redis for distributed metrics collection across PM2 cluster instances:
 
 ### Key Benefits
+
 - **Cluster-wide visibility**: Metrics aggregated across all PM2 instances
 - **Real-time performance monitoring**: Connection tracking, request speeds, error rates
 - **Persistent metrics**: Data survives server restarts and deployments
 - **Scalable architecture**: Supports horizontal scaling with consistent metrics
 
 ### Metrics Collected
+
 - **HTTP Connections**: Current active connections and maximum since startup
 - **Request Processing**: Total, accepted, and error requests with rates
 - **Performance Speed**: Current and maximum requests per second
@@ -429,6 +431,7 @@ This application uses Redis for distributed metrics collection across PM2 cluste
 - **Response Times**: Percentile calculations for performance analysis
 
 ### Redis Key Schema
+
 See `redis-schema.md` for complete documentation of Redis keys and data structures.
 
 ---

@@ -18,12 +18,25 @@
  * 
  * Functions:
  * - displayHeader(): Show dashboard title and branding
- * - displayServerStats(stats): Display Redis-based server metrics
- * - displayConnectionStats(stats): Show HTTP connection metrics
+ * - displayStatus(status): Display overall application status with colored indicator
+ * - displaySystemStatus(process, apiHealth, dbHealth, redisHealth): Show consolidated system status
+ * - displayWebServiceTable(stats): Display Redis metrics in ASCII table format
  * - displayAPIStats(stats): Display endpoint and error statistics
- * - displaySpeedStats(stats): Show request processing speed metrics
- * - getServerStats(): Fetch metrics from /api/cli-stats endpoint
- * - Real-time monitoring and PM2 management functions
+ * - getPM2Status(): Retrieve PM2 process status for configured application
+ * - getServerStats(): Fetch Redis-based server metrics from CLI stats endpoint
+ * - checkAPIHealth(): Perform health check on main API endpoint
+ * - checkDatabaseStatus(): Check database connectivity through health endpoint
+ * - checkRedisStatus(): Verify Redis connectivity by checking metrics endpoint
+ * - showMainMenu(): Display interactive main menu with dashboard action options
+ * - viewStatus(): Execute comprehensive status check and display formatted results
+ * - realtimeMonitor(): Start continuous real-time monitoring with 2-second refresh
+ * - viewLogs(): Interactive log viewer with multiple log type options
+ * - restartApplication(): Prompt for confirmation and restart PM2 application process
+ * - stopApplication(): Prompt for confirmation and stop PM2 application process
+ * - startApplication(): Start application using PM2 ecosystem configuration
+ * - clearLogs(): Prompt for confirmation and clear all PM2 application logs
+ * - showConfiguration(): Display current dashboard configuration settings
+ * - main(): Main dashboard loop handling menu navigation and action execution
  * 
  * Dependencies:
  * - chalk: For colored terminal output
@@ -76,7 +89,15 @@ const formatUptime = (seconds) => {
   return `${secs}s`;
 };
 
-// PM2 Status Check
+/**
+ * Retrieves PM2 process status for the configured application
+ * @returns {Promise<Object|null>} PM2 process object with monitoring data, or null if not found/error
+ * @sideEffects Executes 'pm2 jlist' command via child_process
+ * @throws Does not throw - returns null on error
+ * @example
+ * const process = await getPM2Status()
+ * if (process) console.log(`Memory: ${process.monit.memory}`)
+ */
 async function getPM2Status() {
   try {
     const { stdout } = await execAsync('pm2 jlist');
@@ -87,7 +108,15 @@ async function getPM2Status() {
   }
 }
 
-// Server Stats Check (using existing /api/cli-stats endpoint)
+/**
+ * Fetches Redis-based server metrics from the CLI stats endpoint
+ * @returns {Promise<Object>} Object with status ('online'|'offline') and data/error properties
+ * @sideEffects Makes HTTP GET request to /api/cli-stats endpoint
+ * @throws Does not throw - returns offline status with error message on failure
+ * @example
+ * const stats = await getServerStats()
+ * if (stats.status === 'online') displayWebServiceTable(stats)
+ */
 async function getServerStats() {
   try {
     const response = await axios.get(`${CONFIG.apiBaseUrl}/api/cli-stats`, { timeout: 5000 });
@@ -97,7 +126,15 @@ async function getServerStats() {
   }
 }
 
-// API Health Check
+/**
+ * Performs health check on the main API endpoint
+ * @returns {Promise<Object>} Object with status ('healthy'|'unhealthy') and response/error data
+ * @sideEffects Makes HTTP GET request to /health endpoint
+ * @throws Does not throw - returns unhealthy status with error message on failure
+ * @example
+ * const health = await checkAPIHealth()
+ * const apiIcon = health.status === 'healthy' ? '✓' : '✗'
+ */
 async function checkAPIHealth() {
   try {
     const response = await axios.get(`${CONFIG.apiBaseUrl}/health`, { timeout: 5000 });
@@ -107,11 +144,42 @@ async function checkAPIHealth() {
   }
 }
 
-// Database Status Check
+/**
+ * Checks database connectivity through the health endpoint
+ * @returns {Promise<Object>} Object with status ('connected'|'disconnected') and data/error properties
+ * @sideEffects Makes HTTP GET request to /health/db endpoint
+ * @throws Does not throw - returns disconnected status with error message on failure
+ * @example
+ * const dbHealth = await checkDatabaseStatus()
+ * if (dbHealth.status === 'disconnected') console.error('DB offline')
+ */
 async function checkDatabaseStatus() {
   try {
     const response = await axios.get(`${CONFIG.apiBaseUrl}/health/db`, { timeout: 5000 });
     return { status: 'connected', data: response.data };
+  } catch (error) {
+    return { status: 'disconnected', error: error.message };
+  }
+}
+
+/**
+ * Verifies Redis connectivity by checking if metrics endpoint returns valid data
+ * @returns {Promise<Object>} Object with status ('connected'|'disconnected') and data/error properties
+ * @sideEffects Makes HTTP GET request to /api/cli-stats to verify Redis availability
+ * @throws Does not throw - returns disconnected status with error message on failure
+ * @example
+ * const redis = await checkRedisStatus()
+ * const redisIcon = redis.status === 'connected' ? '✓ Redis' : '✗ Redis'
+ */
+async function checkRedisStatus() {
+  try {
+    const response = await axios.get(`${CONFIG.apiBaseUrl}/api/cli-stats`, { timeout: 5000 });
+    // Check if Redis metrics are available (no error in response)
+    if (response.data && !response.data.error) {
+      return { status: 'connected', data: { message: 'Redis metrics operational' } };
+    } else {
+      return { status: 'disconnected', error: response.data.error || 'Redis metrics not available' };
+    }
   } catch (error) {
     return { status: 'disconnected', error: error.message };
   }
@@ -123,13 +191,22 @@ function displayHeader() {
   const subtitle = chalk.gray('CLI Management Interface');
   const box = boxen(`${title}\n${subtitle}`, {
     padding: 1,
-    margin: 1,
     borderStyle: 'round',
     borderColor: 'blue'
   });
   console.log(box);
 }
 
+/**
+ * Displays overall application status with colored indicator
+ * @param {string} status - Status string ('online' or 'offline')
+ * @returns {void} Outputs colored status box to console
+ * @sideEffects Writes to stdout with chalk colors and boxen formatting
+ * @throws Does not throw - handles any status value gracefully
+ * @example
+ * displayStatus('online') // Shows green box with online status
+ * displayStatus('offline') // Shows red box with offline status
+ */
 function displayStatus(status) {
   const statusColor = status === 'online' ? 'green' : 'red';
   const statusIcon = status === 'online' ? '🟢' : '🔴';
@@ -140,83 +217,70 @@ function displayStatus(status) {
   ));
 }
 
-function displayServerStats(stats) {
-  if (!stats || stats.status === 'offline') {
-    console.log(chalk.red('❌ Server stats unavailable'));
-    return;
+function displaySystemStatus(process, apiHealth, dbHealth, redisHealth) {
+  const statusLines = [];
+
+  // Application Status
+  const appStatus = process ? chalk.green('RUNNING') : chalk.red('STOPPED');
+  statusLines.push(`🚀 Application: ${appStatus}`);
+
+  // PM2 Process Info
+  if (process) {
+    statusLines.push(`💾 Memory: ${chalk.yellow(formatBytes(process.monit?.memory || 0))}`);
+    statusLines.push(`🔄 Restarts: ${chalk.magenta(process.pm2_env?.restart_time || 0)}`);
+    statusLines.push(`⏰ Started: ${chalk.cyan(new Date(process.pm2_env?.pm_uptime || Date.now())
+      .toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(' ', ' '))}`);
   }
 
-  const data = stats.data;
-  const total = data.total || {};
-  const speed = data.speed || {};
-  
-  const info = [
-    `📊 Total Requests: ${chalk.cyan(total.requests || 0)}`,
-    `✅ Accepted Requests: ${chalk.green(total.accepted || 0)}`,
-    `❌ Error Requests: ${chalk.red(total.errors || 0)}`,
-    `📉 Error Rate: ${chalk.yellow(total.errorRate || '0.00')}%`,
-    `⏱️  Server Uptime: ${chalk.green(formatUptime(data.uptime || 0))}`
-  ];
+  // Health Checks
+  const apiStatus = apiHealth.status === 'healthy' ? chalk.green('✓ API') : chalk.red('✗ API');
+  const dbStatus = dbHealth.status === 'connected' ? chalk.green('✓ Database') : chalk.red('✗ Database');
+  const redisStatus = redisHealth.status === 'connected' ? chalk.green('✓ Redis') : chalk.red('✗ Redis');
+
+  statusLines.push(`${apiStatus} | ${dbStatus} | ${redisStatus}`);
 
   console.log(boxen(
-    info.join('\n'),
-    { padding: 1, borderColor: 'cyan', title: 'Server Statistics' }
+    statusLines.join('\n'),
+    { padding: 1, borderColor: 'green', title: '🏠 System Status' }
   ));
 }
 
-function displayConnectionStats(stats) {
+function displayWebServiceTable(stats) {
   if (!stats || stats.status === 'offline') {
+    console.log(chalk.red('❌ Web service stats unavailable'));
     return;
   }
 
   const data = stats.data;
   const connections = data.connections || {};
-  
-  const info = [
-    `🔗 Active Connections: ${chalk.cyan(connections.current || 0)}`,
-    `📈 Max Since Startup: ${chalk.yellow(connections.maxSinceStartup || 0)}`,
-    `🖥️  Local Instance Connections: ${chalk.gray(data.activeConnections || 0)}`
-  ];
-
-  console.log(boxen(
-    info.join('\n'),
-    {
-      title: chalk.blue('HTTP Connections (Cluster-wide)'),
-      titleAlignment: 'center',
-      padding: 1,
-      margin: { top: 1 },
-      borderStyle: 'round',
-      borderColor: 'blue'
-    }
-  ));
-}
-
-function displaySpeedStats(stats) {
-  if (!stats || stats.status === 'offline') {
-    return;
-  }
-
-  const data = stats.data;
   const speed = data.speed || {};
-  
-  const info = [
-    `⚡ Current Speed: ${chalk.cyan(speed.current || 0)} req/sec`,
-    `🚀 Max Speed: ${chalk.yellow(speed.maxSinceStartup || 0)} req/sec`,
-    `📊 Average Speed: ${chalk.magenta(data.uptime > 0 ? ((data.total?.requests || 0) / data.uptime).toFixed(2) : '0.00')} req/sec`
+  const total = data.total || {};
+
+  // Format numbers for table display
+  const connCurr = String(connections.current || 0).padStart(6);
+  const connMax = String(connections.maxSinceStartup || 0).padStart(6);
+  const speedCurr = String((speed.current || 0).toFixed(1)).padStart(6);
+  const speedMax = String((speed.maxSinceStartup || 0).toFixed(1)).padStart(6);
+  const requests = String(total.requests || 0).padStart(11);
+  const accepted = String(total.accepted || 0).padStart(11);
+  const errors = String(total.errors || 0).padStart(11);
+
+  const table = [
+    chalk.gray('+---------------------------------------------------------------+'),
+    chalk.gray('|') + chalk.bold.cyan('                          webservice                           ') + chalk.gray('|'),
+    chalk.gray('+---[ONLINE]--+---[SPEED]---+-----------+-----------+-----------+'),
+    chalk.gray('|') + chalk.white('  curr|   max|  curr|   max|    request|   accepted|      error') + chalk.gray('|'),
+    chalk.gray('+------+------+------+------+-----------+-----------+-----------+'),
+    chalk.gray('|') + chalk.cyan(connCurr) + chalk.gray('|') + chalk.yellow(connMax) + chalk.gray('|') +
+    chalk.green(speedCurr) + chalk.gray('|') + chalk.magenta(speedMax) + chalk.gray('|') +
+    chalk.cyan(requests) + chalk.gray('|') + chalk.green(accepted) + chalk.gray('|') +
+    chalk.red(errors) + chalk.gray('|'),
+    chalk.gray('+------+------+------+------+-----------+-----------+-----------+')
   ];
 
-  console.log(boxen(
-    info.join('\n'),
-    {
-      title: chalk.green('Request Processing Speed'),
-      titleAlignment: 'center',
-      padding: 1,
-      margin: { top: 1 },
-      borderStyle: 'round',
-      borderColor: 'green'
-    }
-  ));
+  console.log('\n' + table.join('\n') + '\n');
 }
+
 
 function displayAPIStats(stats) {
   if (!stats || stats.status === 'offline') {
@@ -243,38 +307,16 @@ function displayAPIStats(stats) {
   ));
 }
 
-function displayProcessInfo(process) {
-  if (!process) {
-    console.log(chalk.red('❌ Process not found'));
-    return;
-  }
 
-  const info = [
-    `📊 Memory: ${formatBytes(process.monit.memory)}`,
-    `💻 CPU: ${process.monit.cpu}%`,
-    `🔄 Restarts: ${process.pm2_env.restart_time}`,
-    `📁 Path: ${process.pm2_env.pm_cwd}`
-  ];
-
-  console.log(boxen(
-    info.join('\n'),
-    { padding: 1, borderColor: 'magenta', title: 'PM2 Process Info' }
-  ));
-}
-
-function displayHealthChecks(apiHealth, dbHealth) {
-  const checks = [
-    `🌐 API: ${apiHealth.status === 'healthy' ? chalk.green('✓') : chalk.red('✗')} ${apiHealth.status}`,
-    `🗄️  Database: ${dbHealth.status === 'connected' ? chalk.green('✓') : chalk.red('✗')} ${dbHealth.status}`
-  ];
-
-  console.log(boxen(
-    checks.join('\n'),
-    { padding: 1, borderColor: 'yellow', title: 'Health Checks' }
-  ));
-}
-
-// Menu Functions
+/**
+ * Displays interactive main menu with dashboard action options
+ * @returns {Promise<string>} Selected action value from menu choices
+ * @sideEffects Shows inquirer interactive menu, waits for user input
+ * @throws May throw on inquirer input/output errors
+ * @example
+ * const action = await showMainMenu()
+ * if (action === 'status') await viewStatus()
+ */
 async function showMainMenu() {
   const choices = [
     { name: '📊 View Status', value: 'status' },
@@ -300,15 +342,24 @@ async function showMainMenu() {
   return action;
 }
 
+/**
+ * Executes comprehensive status check and displays formatted results
+ * @returns {Promise<void>} Resolves when status display is complete
+ * @sideEffects Clears console, shows spinner, makes multiple API calls, displays status
+ * @throws Catches and displays errors with red chalk formatting
+ * @example
+ * await viewStatus() // Shows full system status with metrics
+ */
 async function viewStatus() {
   const spinner = ora('Checking application status...').start();
 
   try {
-    const [process, serverStats, apiHealth, dbHealth] = await Promise.all([
+    const [process, serverStats, apiHealth, dbHealth, redisHealth] = await Promise.all([
       getPM2Status(),
       getServerStats(),
       checkAPIHealth(),
-      checkDatabaseStatus()
+      checkDatabaseStatus(),
+      checkRedisStatus()
     ]);
 
     spinner.stop();
@@ -318,16 +369,9 @@ async function viewStatus() {
     const status = serverStats.status;
     displayStatus(status);
 
-    displayServerStats(serverStats);
-    displayConnectionStats(serverStats);
-    displaySpeedStats(serverStats);
+    displaySystemStatus(process, apiHealth, dbHealth, redisHealth);
+    displayWebServiceTable(serverStats);
     displayAPIStats(serverStats);
-
-    if (process) {
-      displayProcessInfo(process);
-    }
-
-    displayHealthChecks(apiHealth, dbHealth);
 
   } catch (error) {
     spinner.fail('Failed to check status');
@@ -335,35 +379,34 @@ async function viewStatus() {
   }
 }
 
+/**
+ * Starts continuous real-time monitoring with 2-second refresh intervals
+ * @returns {Promise<void>} Never resolves - runs until SIGINT (Ctrl+C)
+ * @sideEffects Sets up interval timer, installs SIGINT handler, clears console repeatedly
+ * @throws Catches and logs monitor errors but continues running
+ * @example
+ * await realtimeMonitor() // Starts live dashboard updates
+ */
 async function realtimeMonitor() {
   console.log(chalk.yellow('Starting real-time monitor...'));
   console.log(chalk.gray('Press Ctrl+C to stop\n'));
 
   const monitor = setInterval(async () => {
     try {
-      const [process, serverStats, apiHealth, dbHealth] = await Promise.all([
+      const [process, serverStats, apiHealth, dbHealth, redisHealth] = await Promise.all([
         getPM2Status(),
         getServerStats(),
         checkAPIHealth(),
-        checkDatabaseStatus()
+        checkDatabaseStatus(),
+        checkRedisStatus()
       ]);
 
       console.clear();
       displayHeader();
 
-      const status = serverStats.status;
-      displayStatus(status);
-
-      displayServerStats(serverStats);
-      displayConnectionStats(serverStats);
-      displaySpeedStats(serverStats);
+      displaySystemStatus(process, apiHealth, dbHealth, redisHealth);
       displayAPIStats(serverStats);
-
-      if (process) {
-        displayProcessInfo(process);
-      }
-
-      displayHealthChecks(apiHealth, dbHealth);
+      displayWebServiceTable(serverStats);
 
       const timestamp = new Date().toLocaleTimeString();
       console.log(chalk.gray(`\nLast updated: ${timestamp}`));
@@ -382,6 +425,14 @@ async function realtimeMonitor() {
   });
 }
 
+/**
+ * Interactive log viewer with multiple log type options and automatic file discovery
+ * @returns {Promise<void>} Resolves when log display is complete
+ * @sideEffects Shows inquirer menu, reads filesystem, executes PM2 commands, displays logs
+ * @throws Catches and displays file access and PM2 execution errors
+ * @example
+ * await viewLogs() // Shows log type menu and displays selected logs
+ */
 async function viewLogs() {
   const { logType } = await inquirer.prompt([
     {
@@ -408,7 +459,7 @@ async function viewLogs() {
     } else {
       // Try to find PM2 numbered log files first
       let logFile = path.join(CONFIG.logPath, `${logType}.log`);
-      
+
       try {
         // Check if the direct log file exists
         await fs.access(logFile);
@@ -424,7 +475,7 @@ async function viewLogs() {
               const numB = parseInt(b.match(/\d+/)?.[0] || '0');
               return numB - numA; // Newest first
             });
-          
+
           if (numberedLogs.length > 0) {
             // Read the most recent numbered log file
             const latestLog = path.join(CONFIG.logPath, numberedLogs[0]);
@@ -436,7 +487,7 @@ async function viewLogs() {
           throw new Error(`No ${logType} log files found`);
         }
       }
-      
+
       logContent = logContent.split('\n').slice(-50).join('\n'); // Last 50 lines
     }
 
@@ -455,6 +506,14 @@ async function viewLogs() {
   }
 }
 
+/**
+ * Prompts for confirmation and restarts the PM2 application process
+ * @returns {Promise<void>} Resolves when restart operation completes or is cancelled
+ * @sideEffects Shows confirmation prompt, executes PM2 restart command, displays spinner
+ * @throws Catches and displays PM2 execution errors
+ * @example
+ * await restartApplication() // Shows confirmation then restarts if confirmed
+ */
 async function restartApplication() {
   const { confirm } = await inquirer.prompt([
     {
@@ -478,6 +537,14 @@ async function restartApplication() {
   }
 }
 
+/**
+ * Prompts for confirmation and stops the PM2 application process
+ * @returns {Promise<void>} Resolves when stop operation completes or is cancelled
+ * @sideEffects Shows confirmation prompt, executes PM2 stop command, displays spinner
+ * @throws Catches and displays PM2 execution errors
+ * @example
+ * await stopApplication() // Shows confirmation then stops if confirmed
+ */
 async function stopApplication() {
   const { confirm } = await inquirer.prompt([
     {
@@ -501,6 +568,14 @@ async function stopApplication() {
   }
 }
 
+/**
+ * Starts the application using PM2 ecosystem configuration
+ * @returns {Promise<void>} Resolves when start operation completes
+ * @sideEffects Executes PM2 start command with ecosystem config, displays spinner
+ * @throws Catches and displays PM2 execution errors
+ * @example
+ * await startApplication() // Starts app with ecosystem.config.js
+ */
 async function startApplication() {
   const spinner = ora('Starting application...').start();
 
@@ -513,6 +588,14 @@ async function startApplication() {
   }
 }
 
+/**
+ * Prompts for confirmation and clears all PM2 application logs
+ * @returns {Promise<void>} Resolves when log clearing completes or is cancelled
+ * @sideEffects Shows confirmation prompt, executes PM2 flush command, displays spinner
+ * @throws Catches and displays PM2 execution errors
+ * @example
+ * await clearLogs() // Shows confirmation then clears logs if confirmed
+ */
 async function clearLogs() {
   const { confirm } = await inquirer.prompt([
     {
@@ -536,7 +619,15 @@ async function clearLogs() {
   }
 }
 
-async function showConfiguration() {
+/**
+ * Displays current dashboard configuration settings in a formatted box
+ * @returns {void} Outputs configuration details to console
+ * @sideEffects Writes to stdout with boxen formatting and emoji icons
+ * @throws Does not throw - handles undefined environment variables gracefully
+ * @example
+ * showConfiguration() // Shows API URL, app name, log path, and environment
+ */
+function showConfiguration() {
   const config = [
     `🌐 API Base URL: ${CONFIG.apiBaseUrl}`,
     `📱 App Name: ${CONFIG.appName}`,
@@ -550,7 +641,14 @@ async function showConfiguration() {
   ));
 }
 
-// Main function
+/**
+ * Main dashboard loop that handles menu navigation and action execution
+ * @returns {Promise<void>} Never resolves - runs until exit action or process termination
+ * @sideEffects Clears console, shows menus, executes actions, waits for user input
+ * @throws Catches and displays errors, waits 2 seconds before continuing
+ * @example
+ * await main() // Starts interactive dashboard interface
+ */
 async function main() {
   console.clear();
   displayHeader();
@@ -582,7 +680,7 @@ async function main() {
           await clearLogs();
           break;
         case 'config':
-          await showConfiguration();
+          showConfiguration();
           break;
         case 'exit':
           console.log(chalk.blue('👋 Goodbye!'));
