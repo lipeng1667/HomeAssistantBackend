@@ -3,7 +3,7 @@
  * @description Centralized configuration management with validation and security checks
  * @author Michael Lee
  * @created 2025-06-26
- * @modified 2025-06-27
+ * @modified 2025-07-01
  * 
  * This file provides centralized configuration management for the entire
  * application with environment variable validation, security checks, and
@@ -13,6 +13,7 @@
  * - 2025-06-26: Initial implementation with JWT and database configuration
  * - 2025-06-27: Added Redis configuration for distributed metrics system
  * - 2025-06-27: Enhanced documentation with comprehensive environment variables
+ * - 2025-07-01: Changed APP_SECRET to APP_SECRET
  * 
  * Functions:
  * - Configuration object factory with validation
@@ -26,7 +27,7 @@
  * Required:
  * - JWT_SECRET: Secret key for user JWT tokens (32+ chars)
  * - JWT_ADMIN_SECRET: Secret key for admin JWT tokens (32+ chars)
- * - IOS_APP_SECRET: Secret key for iOS app authentication (32+ chars)
+ * - APP_SECRET: Secret key for APP authentication (32+ chars)
  * - DB_HOST: Database host address
  * - DB_USER: Database username
  * - DB_PASSWORD: Database password
@@ -50,7 +51,7 @@ const config = {
     env: process.env.NODE_ENV || 'development',
     host: process.env.HOST || '0.0.0.0'
   },
-  
+
   database: {
     host: process.env.DB_HOST || '127.0.0.1',
     user: process.env.DB_USER || 'root',
@@ -70,7 +71,7 @@ const config = {
   },
 
   app: {
-    iosSecret: process.env.IOS_APP_SECRET,
+    appSecret: process.env.APP_SECRET,
     timestampWindow: parseInt(process.env.API_TIMESTAMP_WINDOW, 10) || 300000 // 5 minutes
   },
 
@@ -100,7 +101,7 @@ const config = {
 const requiredEnvVars = [
   'JWT_SECRET',
   'JWT_ADMIN_SECRET',
-  'IOS_APP_SECRET',
+  'APP_SECRET',
   'DB_HOST',
   'DB_USER',
   'DB_PASSWORD',
@@ -119,23 +120,23 @@ if (missingVars.length > 0) {
 const dangerousDefaults = [
   'your-secret-key',
   'your-admin-secret-key',
-  'your-ios-secret-key',
+  'your-app-secret-key',
   'secret',
   'admin-secret',
-  'ios-secret'
+  'app-secret'
 ]
 
-if (dangerousDefaults.includes(config.jwt.secret) || 
-    dangerousDefaults.includes(config.jwt.adminSecret) ||
-    dangerousDefaults.includes(config.app.iosSecret)) {
+if (dangerousDefaults.includes(config.jwt.secret) ||
+  dangerousDefaults.includes(config.jwt.adminSecret) ||
+  dangerousDefaults.includes(config.app.appSecret)) {
   console.error('Secrets cannot use default values. Please set secure random values.')
   process.exit(1)
 }
 
 // Validate secrets are sufficiently complex
-if (config.jwt.secret.length < 32 || 
-    config.jwt.adminSecret.length < 32 || 
-    config.app.iosSecret.length < 32) {
+if (config.jwt.secret.length < 32 ||
+  config.jwt.adminSecret.length < 32 ||
+  config.app.appSecret.length < 32) {
   console.error('All secrets must be at least 32 characters long')
   process.exit(1)
 }

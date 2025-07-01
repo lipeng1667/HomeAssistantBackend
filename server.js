@@ -212,10 +212,10 @@ const createApiLimiter = () => {
   })
 }
 
-const createAuthLimiter = () => {
+const createApiSlidingWindowLimiter = () => {
   if (global.slidingWindowRateLimit) {
     return global.slidingWindowRateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
+      windowMs: config.rateLimit.windowMs, // 15 minutes
       max: config.rateLimit.maxAuthAttempts,
       message: {
         status: 'error',
@@ -225,7 +225,7 @@ const createAuthLimiter = () => {
   }
   // Fallback to express-rate-limit
   return rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: config.rateLimit.windowMs,
     max: config.rateLimit.maxAuthAttempts,
     message: {
       status: 'error',
@@ -236,12 +236,11 @@ const createAuthLimiter = () => {
 
 // Apply rate limiting with Redis-backed limiters
 const apiLimiter = createApiLimiter()
-const authLimiter = createAuthLimiter()
+// TODO: add sliding window limiter for further endpoints
+const apiSlidingWindowLimiter = createApiSlidingWindowLimiter()
 
-// Apply app authentication to login endpoints
-app.use('/api/auth/login', validateAppAuth, authLimiter)
-app.use('/api/admin/login', authLimiter)
-app.use('/api', apiLimiter)
+// Apply app authentication and rate limiting to every API endpoints
+app.use('/api', validateAppAuth, apiLimiter)
 
 // Routes
 app.use('/health', localhostOnly, healthRoutes)
@@ -276,15 +275,15 @@ server.on('connection', (socket) => {
 
   if (!isLocalhost) {
     activeConnections++;
-    
+
     // Update Redis cluster-wide connection count
     if (global.metricsService) {
       global.metricsService.incrementConnections().catch(console.error);
     }
-    
+
     socket.on('close', () => {
       activeConnections--;
-      
+
       // Update Redis cluster-wide connection count
       if (global.metricsService) {
         global.metricsService.decrementConnections().catch(console.error);
@@ -303,15 +302,15 @@ setInterval(async () => {
       const metrics = await global.metricsService.getMetrics();
       const currentRequests = metrics.total?.requests || 0;
       const currentTime = Date.now();
-      
+
       const timeDiff = (currentTime - lastSpeedUpdate) / 1000; // seconds
       const requestDiff = currentRequests - lastRequestCount;
-      
+
       if (timeDiff > 0) {
         const currentSpeed = requestDiff / timeDiff;
         await global.metricsService.updateRequestSpeed(Math.round(currentSpeed * 100) / 100);
       }
-      
+
       lastRequestCount = currentRequests;
       lastSpeedUpdate = currentTime;
     } catch (error) {

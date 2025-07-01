@@ -26,9 +26,8 @@
  * - Blocks requests from unauthorized sources
  * 
  * Required Headers:
- * - X-App-Type: 'ios' (identifies the client type)
  * - X-Timestamp: Unix timestamp in milliseconds
- * - X-Signature: HMAC-SHA256(secret + timestamp + device_id)
+ * - X-Signature: HMAC-SHA256(secret + timestamp)
  */
 
 const crypto = require('crypto');
@@ -48,29 +47,19 @@ const config = require('../config');
  * 
  * // Client-side signature generation:
  * const timestamp = Date.now()
- * const payload = `${timestamp}${device_id}`
- * const signature = crypto.createHmac('sha256', IOS_SECRET).update(payload).digest('hex')
+ * const payload = `${timestamp}`
+ * const signature = crypto.createHmac('sha256', APP_SECRET).update(payload).digest('hex')
  */
 const validateAppAuth = (req, res, next) => {
   try {
-    const appType = req.headers['x-app-type'];
     const timestamp = req.headers['x-timestamp'];
     const clientSignature = req.headers['x-signature'];
-    const { device_id } = req.body;
 
     // Validate required headers
-    if (!appType || !timestamp || !clientSignature) {
+    if (!timestamp || !clientSignature) {
       return res.status(400).json({
         status: 'error',
         message: 'Missing required headers'
-      });
-    }
-
-    // Only allow iOS app
-    if (appType !== 'ios') {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Unauthorized app type'
       });
     }
 
@@ -87,19 +76,19 @@ const validateAppAuth = (req, res, next) => {
       });
     }
 
-    // Generate expected signature: HMAC-SHA256(secret, timestamp + device_id)
-    const iosSecret = config.app.iosSecret;
-    if (!iosSecret) {
-      console.error('iOS app secret not configured');
+    // Generate expected signature: HMAC-SHA256(secret, timestamp)
+    const appSecret = config.app.appSecret;
+    if (!appSecret) {
+      console.error('APP app secret not configured');
       return res.status(500).json({
         status: 'error',
         message: 'Server configuration error'
       });
     }
 
-    const payload = `${timestamp}${device_id || ''}`;
+    const payload = `${timestamp}`;
     const expectedSignature = crypto
-      .createHmac('sha256', iosSecret)
+      .createHmac('sha256', appSecret)
       .update(payload)
       .digest('hex');
 
@@ -113,7 +102,6 @@ const validateAppAuth = (req, res, next) => {
 
     // Add app info to request for logging
     req.appAuth = {
-      type: appType,
       timestamp: requestTime,
       verified: true
     };

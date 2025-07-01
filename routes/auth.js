@@ -20,15 +20,13 @@
 
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/database');
-const jwt = require('jsonwebtoken');
 
 /**
  * @description Anonymous login endpoint
  * @async
- * @function login
- * @route POST /api/auth/login
+ * @function anonymous
+ * @route POST /api/auth/anonymous
  * 
  * @param {Object} req.body
  * @param {string} req.body.device_id - Device identifier
@@ -40,14 +38,14 @@ const jwt = require('jsonwebtoken');
  * @throws {400} If device_id is missing
  * @throws {500} If server error occurs
  */
-router.post('/login', async (req, res) => {
+router.post('/anonymous', async (req, res) => {
   try {
     const { device_id } = req.body;
 
     if (!device_id) {
       return res.status(400).json({
         status: 'error',
-        message: 'Device ID is required'
+        message: 'parameter not found'
       });
     }
 
@@ -58,47 +56,53 @@ router.post('/login', async (req, res) => {
     );
 
     let userId;
-    let userUuid;
 
     if (existingUsers.length === 0) {
-      // Create new user
-      userUuid = uuidv4();
-      const [result] = await pool.execute(
-        'INSERT INTO users (uuid, device_id) VALUES (?, ?)',
-        [userUuid, device_id]
-      );
-      userId = result.insertId;
+      // Begin transaction for user creation and logging
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+
+        // Create new user
+        const [result] = await connection.execute(
+          'INSERT INTO users (device_id) VALUES (?)',
+          [device_id]
+        );
+        userId = result.insertId;
+
+        // Log the login activity
+        await connection.execute(
+          'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 0, "anonymous_login")',
+          [userId]
+        );
+
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
     } else {
       userId = existingUsers[0].id;
-      userUuid = existingUsers[0].uuid;
+
+      // Log the login activity for existing user
+      await pool.execute(
+        'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 0, "anonymous_login")',
+        [userId]
+      );
     }
-
-    // Log the login activity
-    await pool.execute(
-      'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 0, "login")',
-      [userId]
-    );
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId, userUuid, device_id },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '30d' }
-    );
 
     res.json({
       status: 'success',
       data: {
-        token,
         user: {
           id: userId,
-          uuid: userUuid,
-          device_id
         }
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Anonymous login error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

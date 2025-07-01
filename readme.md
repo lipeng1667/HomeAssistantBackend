@@ -4,6 +4,7 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 
 ## Features
 
+- **App-Level Authentication** (iOS client validation with HMAC signatures)
 - **User Authentication** (Anonymous, device-based login)
 - **Forum System** (Questions and Replies)
 - **Instant Messaging System** (User-to-Admin)
@@ -69,6 +70,10 @@ REDIS_PORT=6379
 REDIS_PASSWORD=
 REDIS_DB=0
 REDIS_KEY_PREFIX=ha:
+
+# iOS App Authentication
+IOS_APP_SECRET=your_very_secure_ios_app_secret_32chars_min
+TIMESTAMP_WINDOW_MS=300000
 
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
@@ -289,18 +294,54 @@ npm install -g jsdoc
 jsdoc -c jsdoc.json
 ```
 
+## App Authentication
+
+The backend implements **app-level authentication** to ensure requests originate from authorized iOS clients before processing user authentication.
+
+### How It Works
+
+1. **Client generates signature**: `HMAC-SHA256(ios_secret, timestamp + device_id)`
+2. **Required headers** on authentication requests:
+   - `X-App-Type: ios`
+   - `X-Timestamp: {unix_timestamp_ms}`
+   - `X-Signature: {hmac_hex_signature}`
+3. **Server validates**: timestamp window (±5 minutes) and signature
+4. **Prevents**: unauthorized access from unknown sources and replay attacks
+
+### iOS Client Implementation
+
+```swift
+// Generate timestamp and signature
+let timestamp = String(Int64(Date().timeIntervalSince1970 * 1000))
+let payload = "\(timestamp)\(deviceId)"
+let signature = payload.hmacSHA256(key: iosSecret)
+
+// Add headers to request
+request.setValue("ios", forHTTPHeaderField: "X-App-Type")
+request.setValue(timestamp, forHTTPHeaderField: "X-Timestamp")
+request.setValue(signature, forHTTPHeaderField: "X-Signature")
+```
+
+### Security Features
+
+- **HMAC-SHA256** signature validation
+- **Timestamp-based** replay attack prevention
+- **Constant-time** signature comparison
+- **5-minute window** for clock drift tolerance
+
 ## Security Considerations
 
 1. **Always use HTTPS in production**
 2. **Keep your JWT secrets secure and complex** (32+ characters required)
-3. **Secure your Redis instance** with authentication and network restrictions
-4. **Regularly update dependencies** and security patches
-5. **Monitor rate limiting** and adjust thresholds as needed
-6. **Keep MariaDB and Redis servers secure** and updated
-7. **Regularly backup your database** and Redis data if persistence is enabled
-8. **Use strong passwords** for database and Redis authentication
-9. **Implement network firewalls** to restrict database and Redis access
-10. **Monitor application metrics** for unusual patterns or attacks
+3. **Secure your iOS app secret** - never expose in client code, use secure key storage
+4. **Secure your Redis instance** with authentication and network restrictions
+5. **Regularly update dependencies** and security patches
+6. **Monitor rate limiting** and adjust thresholds as needed
+7. **Keep MariaDB and Redis servers secure** and updated
+8. **Regularly backup your database** and Redis data if persistence is enabled
+9. **Use strong passwords** for database and Redis authentication
+10. **Implement network firewalls** to restrict database and Redis access
+11. **Monitor application metrics** for unusual patterns or attacks
 
 ### Redis Security
 
@@ -441,7 +482,7 @@ See `redis-schema.md` for complete documentation of Redis keys and data structur
 - [x] **Rate limiting and abuse prevention** (Redis-based distributed)
 - [x] **Real-time metrics collection** (Redis cluster-wide)
 - [x] **Performance monitoring dashboard** (CLI with comprehensive stats)
-- [ ] **Admin dashboard UI** (Web-based interface)
+- [x] **Admin dashboard UI** (Web-based interface)
 - [ ] **WebSocket support** for real-time IM
 - [ ] **Redis persistence configuration** for production
 - [ ] **Grafana integration** for advanced analytics
