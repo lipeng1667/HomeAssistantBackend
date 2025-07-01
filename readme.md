@@ -10,7 +10,6 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 - **Instant Messaging System** (User-to-Admin)
 - **Activity Logging** with comprehensive audit trails
 - **Admin Panel** with role-based access control
-- **Secure API Endpoints** with JWT authentication
 - **Redis-based Distributed Metrics** across PM2 cluster instances
 - **Advanced Rate Limiting** with Redis-backed cluster coordination
 - **Real-time Performance Monitoring** with connection tracking
@@ -59,10 +58,6 @@ DB_HOST=localhost
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 DB_NAME=home_assistant
-
-# JWT Configuration (32+ characters required)
-JWT_SECRET=your_very_secure_jwt_secret_32chars_min
-JWT_ADMIN_SECRET=your_very_secure_admin_jwt_secret_32chars_min
 
 # Redis Configuration (Optional - will use defaults if not set)
 REDIS_HOST=127.0.0.1
@@ -332,7 +327,6 @@ request.setValue(signature, forHTTPHeaderField: "X-Signature")
 ## Security Considerations
 
 1. **Always use HTTPS in production**
-2. **Keep your JWT secrets secure and complex** (32+ characters required)
 3. **Secure your iOS app secret** - never expose in client code, use secure key storage
 4. **Secure your Redis instance** with authentication and network restrictions
 5. **Regularly update dependencies** and security patches
@@ -438,7 +432,6 @@ This repository includes:
 
 ## 🔐 Security
 
-- JWT-based authentication for admin
 - UUID + device_id for stateless anonymous sessions
 - Role distinction for user/admin actions
 - Foreign key integrity and activity tracking
@@ -449,7 +442,7 @@ This repository includes:
 
 - Make sure to load `database.sql` to set up schema
 - Use Postman or Swagger for API testing
-- Use `.env` file to manage secrets (JWT keys, DB credentials)
+- Use `.env` file to manage secrets (DB credentials)
 
 ## 🔧 Redis Metrics Architecture
 

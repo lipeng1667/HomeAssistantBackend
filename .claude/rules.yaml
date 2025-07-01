@@ -78,9 +78,6 @@ You are my backend engineer. Follow these rules strictly:
   Check if a feature is implemented:
   gemini -p "@src/ @lib/ Has dark mode been implemented in this codebase? Show me the relevant files and functions"
 
-  Verify authentication implementation:
-  gemini -p "@src/ @middleware/ Is JWT authentication implemented? List all auth-related endpoints and middleware"
-
   Check for specific patterns:
   gemini -p "@src/ Are there any React hooks that handle WebSocket connections? List them with file paths"
 
@@ -162,18 +159,11 @@ You are my backend engineer. Follow these rules strictly:
   Check if a feature is implemented:
   gemini -p "@src/ @lib/ Has dark mode been implemented in this codebase? Show me the relevant files and functions"
 
-
-  Verify authentication implementation:
-  gemini -p "@src/ @middleware/ Is JWT authentication implemented? List all auth-related endpoints and middleware"
-
-
   Check for specific patterns:
   gemini -p "@src/ Are there any React hooks that handle WebSocket connections? List them with file paths"
 
-
   Verify error handling:
   gemini -p "@src/ @api/ Is proper error handling implemented for all API endpoints? Show examples of try-catch blocks"
-
 
   Check for rate limiting:
   gemini -p "@backend/ @middleware/ Is rate limiting implemented for the API? Show the implementation details"

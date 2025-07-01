@@ -7,12 +7,11 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 ### For APP
 
-#### 🔑 Auth (Anonymous & Normal)
+#### 🔑 Auth (Anonymous Only)
 
 | Method | Endpoint             | Description                            |
 | ------ | -------------------- | -------------------------------------- |
-| POST   | `/api/auth/anonymous`| Anonymous login using UUID & device_id |
-| POST   | `/api/auth/login`    | Normal login using username & password |
+| POST   | `/api/auth/anonymous`| Anonymous login using device_id        |
 | POST   | `/api/auth/logout`   | End session                            |
 | POST   | `/api/auth/register` | Register with username and password    |
 
@@ -141,7 +140,7 @@ Logs out the authenticated user.
 
 ```bash
 curl -X POST http://localhost:10000/api/auth/logout \
-  -H "Authorization: Bearer your_jwt_token"
+  
 ```
 
 **Example Response:**
@@ -169,7 +168,7 @@ Retrieves a list of all forum questions.
 
 ```bash
 curl -X GET http://localhost:10000/api/forum/questions \
-  -H "Authorization: Bearer your_jwt_token"
+  
 ```
 
 **Example Response:**
@@ -209,7 +208,6 @@ Creates a new forum question.
 ```bash
 curl -X POST http://localhost:10000/api/forum/questions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{"title": "How to setup WiFi?", "content": "I need help setting up my device WiFi connection."}'
 ```
 
@@ -243,7 +241,6 @@ Retrieves the details of a specific question, including replies.
 
 ```bash
 curl -X GET http://localhost:10000/api/forum/questions/1 \
-  -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Example Response:**
@@ -293,7 +290,6 @@ Posts a reply to a specific question.
 ```bash
 curl -X POST http://localhost:10000/api/forum/questions/1/reply \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{"content": "Try checking your router settings first."}'
 ```
 
@@ -327,7 +323,6 @@ Retrieves the chat history for the authenticated user.
 
 ```bash
 curl -X GET http://localhost:10000/api/chat/messages \
-  -H "Authorization: Bearer your_jwt_token"
 ```
 
 **Example Response:**
@@ -369,7 +364,6 @@ Sends a message in the chat.
 ```bash
 curl -X POST http://localhost:10000/api/chat/messages \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{"message": "Hello, I need assistance with my device setup."}'
 ```
 
@@ -413,7 +407,6 @@ Logs a user activity.
 ```bash
 curl -X POST http://localhost:10000/api/logs/activity \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your_jwt_token" \
   -d '{"action_type": 1, "action": "view_forum", "metadata": {"page_number": 1}}'
 ```
 
@@ -440,8 +433,6 @@ curl -X POST http://localhost:10000/api/logs/activity \
 **Note:** These endpoints are for administrative use only and require admin authentication.
 
 ### `POST /api/admin/login`
-
-Logs in an admin and returns a JWT token.
 
 **App Authentication:** Required (see headers above)
 
@@ -477,7 +468,6 @@ curl -X POST http://localhost:10000/api/admin/login \
 {
   "status": "success",
   "data": {
-    "token": "admin_jwt_token",
     "admin": {
       "id": 1,
       "username": "admin",
@@ -497,7 +487,6 @@ Retrieves all forum questions for admin view.
 
 ```bash
 curl -X GET http://localhost:10000/api/admin/forum/questions \
-  -H "Authorization: Bearer admin_jwt_token"
 ```
 
 **Example Response:**
@@ -537,7 +526,6 @@ Allows an admin to reply to a forum question.
 ```bash
 curl -X POST http://localhost:10000/api/admin/forum/questions/1/reply \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer admin_jwt_token" \
   -d '{"content": "This is a comprehensive solution to your problem..."}'
 ```
 
@@ -571,7 +559,6 @@ Retrieves the chat history between an admin and a user.
 
 ```bash
 curl -X GET http://localhost:10000/api/admin/chat/1/messages \
-  -H "Authorization: Bearer admin_jwt_token"
 ```
 
 **Example Response:**
@@ -614,7 +601,6 @@ Allows an admin to send a message to a user.
 ```bash
 curl -X POST http://localhost:10000/api/admin/chat/1/messages \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer admin_jwt_token" \
   -d '{"message": "Hello! How can I assist you today?"}'
 ```
 

@@ -111,11 +111,6 @@ DB_NAME=home_assistant
 DB_CONNECTION_LIMIT=20
 DB_QUEUE_LIMIT=100
 
-# JWT Configuration (MUST be 32+ characters)
-JWT_SECRET=your_very_secure_jwt_secret_key_here_32chars_minimum
-JWT_ADMIN_SECRET=your_very_secure_admin_jwt_secret_key_here_32chars_minimum
-JWT_EXPIRES_IN=30d
-
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100

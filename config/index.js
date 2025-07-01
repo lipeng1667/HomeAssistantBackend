@@ -10,7 +10,7 @@
  * Redis configuration for distributed metrics and rate limiting.
  * 
  * Modification Log:
- * - 2025-06-26: Initial implementation with JWT and database configuration
+ * - 2025-06-26: Initial implementation with database configuration
  * - 2025-06-27: Added Redis configuration for distributed metrics system
  * - 2025-06-27: Enhanced documentation with comprehensive environment variables
  * - 2025-07-01: Changed APP_SECRET to APP_SECRET
@@ -18,15 +18,12 @@
  * Functions:
  * - Configuration object factory with validation
  * - Environment variable validation and security checks
- * - JWT secret complexity validation
  * 
  * Dependencies:
  * - dotenv: Environment variable loading (loaded in server.js)
  * 
  * Environment Variables:
  * Required:
- * - JWT_SECRET: Secret key for user JWT tokens (32+ chars)
- * - JWT_ADMIN_SECRET: Secret key for admin JWT tokens (32+ chars)
  * - APP_SECRET: Secret key for APP authentication (32+ chars)
  * - DB_HOST: Database host address
  * - DB_USER: Database username
@@ -64,11 +61,6 @@ const config = {
     idleTimeout: parseInt(process.env.DB_IDLE_TIMEOUT, 10) || 300000
   },
 
-  jwt: {
-    secret: process.env.JWT_SECRET,
-    adminSecret: process.env.JWT_ADMIN_SECRET,
-    expiresIn: process.env.JWT_EXPIRES_IN || '30d'
-  },
 
   app: {
     appSecret: process.env.APP_SECRET,
@@ -99,8 +91,6 @@ const config = {
 
 // Validate required configuration
 const requiredEnvVars = [
-  'JWT_SECRET',
-  'JWT_ADMIN_SECRET',
   'APP_SECRET',
   'DB_HOST',
   'DB_USER',
@@ -118,26 +108,19 @@ if (missingVars.length > 0) {
 
 // Validate secrets are not default values
 const dangerousDefaults = [
-  'your-secret-key',
-  'your-admin-secret-key',
   'your-app-secret-key',
   'secret',
-  'admin-secret',
   'app-secret'
 ]
 
-if (dangerousDefaults.includes(config.jwt.secret) ||
-  dangerousDefaults.includes(config.jwt.adminSecret) ||
-  dangerousDefaults.includes(config.app.appSecret)) {
-  console.error('Secrets cannot use default values. Please set secure random values.')
+if (dangerousDefaults.includes(config.app.appSecret)) {
+  console.error('APP_SECRET cannot use default values. Please set secure random values.')
   process.exit(1)
 }
 
 // Validate secrets are sufficiently complex
-if (config.jwt.secret.length < 32 ||
-  config.jwt.adminSecret.length < 32 ||
-  config.app.appSecret.length < 32) {
-  console.error('All secrets must be at least 32 characters long')
+if (config.app.appSecret.length < 32) {
+  console.error('APP_SECRET must be at least 32 characters long')
   process.exit(1)
 }
 

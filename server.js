@@ -38,9 +38,8 @@
  * Business Logic Routes:
  * - /api/auth: User authentication and authorization
  * - /api/forum: Forum questions and replies
- * - /api/chat: Real-time messaging between users and admins
+ * - /api/chat: Real-time messaging between users
  * - /api/logs: User activity logging and audit trails
- * - /api/admin: Admin-only management endpoints
  * 
  * System Routes (localhost only):
  * - /health: Basic health check endpoint
@@ -88,7 +87,6 @@ const authRoutes = require('./routes/auth')
 const forumRoutes = require('./routes/forum')
 const chatRoutes = require('./routes/chat')
 const logRoutes = require('./routes/logs')
-const adminRoutes = require('./routes/admin')
 const healthRoutes = require('./routes/health')
 
 const app = express();
@@ -248,7 +246,6 @@ app.use('/api/auth', authRoutes)
 app.use('/api/forum', forumRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/logs', logRoutes)
-app.use('/api/admin', adminRoutes)
 
 // 404 handler
 app.use(notFoundHandler)

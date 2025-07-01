@@ -11,7 +11,6 @@
  * Dependencies:
  * - express: Web framework
  * - bcrypt: Password hashing
- * - jsonwebtoken: JWT token handling
  * - mysql2: Database operations
  * 
  * Routes:
@@ -27,7 +26,6 @@ const router = express.Router();
 const pool = require('../config/database');
 const { authenticateAdmin } = require('../middleware/auth');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 
 /**
  * @description Admin login endpoint
@@ -80,16 +78,9 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { adminId: admin.id, username: admin.username },
-      process.env.JWT_ADMIN_SECRET || 'your-admin-secret-key',
-      { expiresIn: '1d' }
-    );
-
     res.json({
       status: 'success',
       data: {
-        token,
         admin: {
           id: admin.id,
           username: admin.username

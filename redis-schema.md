@@ -28,6 +28,7 @@ Environment variable: `REDIS_KEY_PREFIX=ha:`
 | `ha:errors:endpoint:{METHOD path}` | INTEGER | None | Error count per endpoint |
 | `ha:rate_limit:{identifier}` | SORTED SET | Variable | Fixed window rate limiting |
 | `ha:sliding_limit:{identifier}` | SORTED SET | Variable | Sliding window rate limiting |
+| `ha:user:{user_id}` | HASH | 7d | Complete user data (device_id, login_time, last_seen, active) |
 
 ## Data Categories
 
@@ -121,12 +122,44 @@ ha:sliding_limit:{identifier}        → SORTED SET (TTL: windowMs/1000)
 # TTL matches rate limit window
 ```
 
+### 4. User Management
+
+#### User Data and Session
+
+```redis
+ha:user:{user_id}                    → HASH (TTL: 604800s = 7d)
+# Stores complete user information including session and status
+# Fields:
+#   device_id: Device identifier from login
+#   login_time: Unix timestamp when session was created
+#   last_seen: Unix timestamp of last API request
+#   active: User status ("true" for active, "false" for disabled)
+#   ip_address: Client IP address (optional)
+# Examples:
+#   HSET ha:user:123 device_id "iPhone_12_ABC123"
+#   HSET ha:user:123 login_time "1672531200000"
+#   HSET ha:user:123 last_seen "1672531800000"
+#   HSET ha:user:123 active "true"
+#   HSET ha:user:123 ip_address "192.168.1.100"
+# 
+# Session Management:
+#   - Automatically expires after 7 days of inactivity
+#   - TTL is refreshed on each API request
+#   - Can be manually deleted for instant logout
+#
+# Status Control:
+#   - active="true": User can access APIs
+#   - active="false": User is blocked (even with valid session)
+#   - Instant user control without waiting for session expiry
+```
+
 ## Data Types Summary
 
 | Data Type | Keys | Purpose |
 |-----------|------|---------|
 | INTEGER | requests:*, errors:* | Counters and totals |
 | SORTED SET | rate_limit:*, sliding_limit:* | Rate limiting |
+| HASH | user:* | Complete user data and session storage |
 
 ## TTL (Time To Live) Policies
 
@@ -134,6 +167,7 @@ ha:sliding_limit:{identifier}        → SORTED SET (TTL: windowMs/1000)
 |-------------|-----|--------|
 | rate_limit:* | Variable (window size) | Rate limit window management |
 | sliding_limit:* | Variable (window size) | Sliding window management |
+| user:* | 604800s (7d) | User session timeout and auto-cleanup |
 | All others | None (persistent) | Core metrics preservation |
 
 ## Key Naming Conventions
@@ -147,32 +181,57 @@ ha:sliding_limit:{identifier}        → SORTED SET (TTL: windowMs/1000)
 ## Memory Considerations
 
 - **Rate limiting**: Auto-expire based on window size
+- **User data**: Auto-expire after 7 days of inactivity
 - **Core counters**: Persistent (no automatic cleanup)
+- **Single hash per user**: Efficient memory usage vs separate keys
 
 ## Redis Commands Used
 
 - `INCR`, `INCRBY` - Counter increments
 - `ZADD`, `ZCARD`, `ZRANGE` - Sorted set operations
 - `ZREMRANGEBYSCORE` - Rate limit cleanup
+- `HSET`, `HGET`, `HGETALL` - Hash field operations
+- `SET`, `GET` - String operations
 - `EXPIRE` - TTL management
 - `MULTI`, `EXEC` - Atomic transactions
 
 ## Example Usage
 
 ```javascript
+// Create user session on login
+await client.hSet('ha:user:123', {
+  device_id: 'iPhone_12_ABC123',
+  login_time: Date.now().toString(),
+  last_seen: Date.now().toString(),
+  active: 'true',
+  ip_address: '192.168.1.100'
+})
+await client.expire('ha:user:123', 604800) // 7 days
+
+// Validate user on API request
+const user = await client.hGetAll('ha:user:123')
+if (!user.device_id) {
+  return 'Session expired'
+}
+if (user.active !== 'true') {
+  return 'User disabled'
+}
+
+// Update last seen and refresh TTL
+await client.multi()
+  .hSet('ha:user:123', 'last_seen', Date.now().toString())
+  .expire('ha:user:123', 604800)
+  .exec()
+
+// Disable user instantly
+await client.hSet('ha:user:123', 'active', 'false')
+
+// Logout user (delete session)
+await client.del('ha:user:123')
+
 // Increment request counter
 await client.incrBy('ha:requests:total', 1)
-await client.incrBy('ha:requests:endpoint:GET /api/users', 1)
-
-// Rate limiting check
-await client.zAdd('ha:rate_limit:192.168.1.100', {
-  score: Date.now(),
-  value: Date.now().toString()
-})
-
-// Get metrics
-const totalRequests = await client.get('ha:requests:total')
-const totalErrors = await client.get('ha:errors:total')
+await client.incrBy('ha:requests:endpoint:GET /api/forum/questions', 1)
 ```
 
 This schema enables comprehensive monitoring and analytics across distributed PM2 instances while maintaining optimal performance and memory usage.
