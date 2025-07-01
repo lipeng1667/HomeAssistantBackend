@@ -25,18 +25,22 @@ const pool = require('../config/database');
 const { authenticateUser } = require('../middleware/auth');
 
 /**
- * @description Get all forum questions
+ * @description Get all forum questions (requires authentication)
  * @async
  * @function getQuestions
  * @route GET /api/forum/questions
+ * 
+ * @param {Object} req.user - User object from auth middleware
+ * @param {number} req.user.id - User ID
  * 
  * @returns {Object} Response object
  * @returns {string} Response.status - Success/error status
  * @returns {Array} Response.data - List of questions with reply counts
  * 
+ * @throws {401} If authentication fails
  * @throws {500} If server error occurs
  */
-router.get('/questions', async (req, res) => {
+router.get('/questions', authenticateUser, async (req, res) => {
   try {
     const [questions] = await pool.execute(`
             SELECT q.*, u.uuid as user_uuid, 
@@ -127,22 +131,25 @@ router.post('/questions', authenticateUser, async (req, res) => {
 });
 
 /**
- * @description Get question details with replies
+ * @description Get question details with replies (requires authentication)
  * @async
  * @function getQuestionDetails
  * @route GET /api/forum/questions/:id
  * 
  * @param {Object} req.params
  * @param {string} req.params.id - Question ID
+ * @param {Object} req.user - User object from auth middleware
+ * @param {number} req.user.id - User ID
  * 
  * @returns {Object} Response object
  * @returns {string} Response.status - Success/error status
  * @returns {Object} Response.data - Question details and replies
  * 
+ * @throws {401} If authentication fails
  * @throws {404} If question not found
  * @throws {500} If server error occurs
  */
-router.get('/questions/:id', async (req, res) => {
+router.get('/questions/:id', authenticateUser, async (req, res) => {
   try {
     const questionId = req.params.id;
 
