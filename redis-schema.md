@@ -69,7 +69,6 @@ ha:requests:endpoint:{METHOD path}   → INTEGER
 # Never expires
 ```
 
-
 ### 2. Error Tracking
 
 #### Global Error Counters
@@ -91,7 +90,6 @@ ha:errors:endpoint:{METHOD path}     → INTEGER
 #   ha:errors:endpoint:POST /api/auth/login
 # Never expires
 ```
-
 
 ### 3. Distributed Rate Limiting
 
