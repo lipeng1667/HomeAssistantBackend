@@ -26,6 +26,7 @@
  * Required:
  * - JWT_SECRET: Secret key for user JWT tokens (32+ chars)
  * - JWT_ADMIN_SECRET: Secret key for admin JWT tokens (32+ chars)
+ * - IOS_APP_SECRET: Secret key for iOS app authentication (32+ chars)
  * - DB_HOST: Database host address
  * - DB_USER: Database username
  * - DB_PASSWORD: Database password
@@ -68,6 +69,11 @@ const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '30d'
   },
 
+  app: {
+    iosSecret: process.env.IOS_APP_SECRET,
+    timestampWindow: parseInt(process.env.API_TIMESTAMP_WINDOW, 10) || 300000 // 5 minutes
+  },
+
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 900000,
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100,
@@ -94,6 +100,7 @@ const config = {
 const requiredEnvVars = [
   'JWT_SECRET',
   'JWT_ADMIN_SECRET',
+  'IOS_APP_SECRET',
   'DB_HOST',
   'DB_USER',
   'DB_PASSWORD',
@@ -108,23 +115,28 @@ if (missingVars.length > 0) {
   process.exit(1)
 }
 
-// Validate JWT secrets are not default values
+// Validate secrets are not default values
 const dangerousDefaults = [
   'your-secret-key',
   'your-admin-secret-key',
+  'your-ios-secret-key',
   'secret',
-  'admin-secret'
+  'admin-secret',
+  'ios-secret'
 ]
 
 if (dangerousDefaults.includes(config.jwt.secret) || 
-    dangerousDefaults.includes(config.jwt.adminSecret)) {
-  console.error('JWT secrets cannot use default values. Please set secure random values.')
+    dangerousDefaults.includes(config.jwt.adminSecret) ||
+    dangerousDefaults.includes(config.app.iosSecret)) {
+  console.error('Secrets cannot use default values. Please set secure random values.')
   process.exit(1)
 }
 
-// Validate JWT secrets are sufficiently complex
-if (config.jwt.secret.length < 32 || config.jwt.adminSecret.length < 32) {
-  console.error('JWT secrets must be at least 32 characters long')
+// Validate secrets are sufficiently complex
+if (config.jwt.secret.length < 32 || 
+    config.jwt.adminSecret.length < 32 || 
+    config.app.iosSecret.length < 32) {
+  console.error('All secrets must be at least 32 characters long')
   process.exit(1)
 }
 

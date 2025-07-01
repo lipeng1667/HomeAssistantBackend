@@ -72,6 +72,7 @@ const redisClient = require('./config/redis')
 const metricsService = require('./services/metrics')
 const metricsMiddleware = require('./middleware/metrics')
 const { redisRateLimit, slidingWindowRateLimit } = require('./middleware/redisRateLimit')
+const { validateAppAuth } = require('./middleware/appAuth')
 
 // Initialize Redis connection
 redisClient.connect().catch(console.error)
@@ -237,7 +238,8 @@ const createAuthLimiter = () => {
 const apiLimiter = createApiLimiter()
 const authLimiter = createAuthLimiter()
 
-app.use('/api/auth/login', authLimiter)
+// Apply app authentication to login endpoints
+app.use('/api/auth/login', validateAppAuth, authLimiter)
 app.use('/api/admin/login', authLimiter)
 app.use('/api', apiLimiter)
 

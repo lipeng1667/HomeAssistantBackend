@@ -31,11 +31,7 @@
  * - viewStatus(): Execute comprehensive status check and display formatted results
  * - realtimeMonitor(): Start continuous real-time monitoring with 2-second refresh
  * - viewLogs(): Interactive log viewer with multiple log type options
- * - restartApplication(): Prompt for confirmation and restart PM2 application process
- * - stopApplication(): Prompt for confirmation and stop PM2 application process
- * - startApplication(): Start application using PM2 ecosystem configuration
  * - clearLogs(): Prompt for confirmation and clear all PM2 application logs
- * - showConfiguration(): Display current dashboard configuration settings
  * - main(): Main dashboard loop handling menu navigation and action execution
  * 
  * Dependencies:
@@ -75,18 +71,6 @@ const formatBytes = (bytes) => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-const formatUptime = (seconds) => {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
 };
 
 /**
@@ -197,26 +181,6 @@ function displayHeader() {
   console.log(box);
 }
 
-/**
- * Displays overall application status with colored indicator
- * @param {string} status - Status string ('online' or 'offline')
- * @returns {void} Outputs colored status box to console
- * @sideEffects Writes to stdout with chalk colors and boxen formatting
- * @throws Does not throw - handles any status value gracefully
- * @example
- * displayStatus('online') // Shows green box with online status
- * displayStatus('offline') // Shows red box with offline status
- */
-function displayStatus(status) {
-  const statusColor = status === 'online' ? 'green' : 'red';
-  const statusIcon = status === 'online' ? '🟢' : '🔴';
-
-  console.log(boxen(
-    `${statusIcon} Status: ${chalk[statusColor](status.toUpperCase())}`,
-    { padding: 1, borderColor: statusColor }
-  ));
-}
-
 function displaySystemStatus(process, apiHealth, dbHealth, redisHealth) {
   const statusLines = [];
 
@@ -272,7 +236,7 @@ function displayWebServiceTable(stats) {
     chalk.gray('|') + chalk.white('  curr|   max|  curr|   max|    request|   accepted|      error') + chalk.gray('|'),
     chalk.gray('+------+------+------+------+-----------+-----------+-----------+'),
     chalk.gray('|') + chalk.cyan(connCurr) + chalk.gray('|') + chalk.yellow(connMax) + chalk.gray('|') +
-    chalk.green(speedCurr) + chalk.gray('|') + chalk.magenta(speedMax) + chalk.gray('|') +
+    chalk.cyan(speedCurr) + chalk.gray('|') + chalk.yellow(speedMax) + chalk.gray('|') +
     chalk.cyan(requests) + chalk.gray('|') + chalk.green(accepted) + chalk.gray('|') +
     chalk.red(errors) + chalk.gray('|'),
     chalk.gray('+------+------+------+------+-----------+-----------+-----------+')
@@ -319,14 +283,9 @@ function displayAPIStats(stats) {
  */
 async function showMainMenu() {
   const choices = [
-    { name: '📊 View Status', value: 'status' },
     { name: '📈 Real-time Monitor', value: 'realtime' },
     { name: '📋 View Logs', value: 'logs' },
-    { name: '🔄 Restart Application', value: 'restart' },
-    { name: '⏹️  Stop Application', value: 'stop' },
-    { name: '▶️  Start Application', value: 'start' },
-    { name: '🗑️  Clear Logs', value: 'clear-logs' },
-    { name: '🔧 Configuration', value: 'config' },
+    { name: '🗑️ Clear Logs', value: 'clear-logs' },
     { name: '❌ Exit', value: 'exit' }
   ];
 
@@ -340,43 +299,6 @@ async function showMainMenu() {
   ]);
 
   return action;
-}
-
-/**
- * Executes comprehensive status check and displays formatted results
- * @returns {Promise<void>} Resolves when status display is complete
- * @sideEffects Clears console, shows spinner, makes multiple API calls, displays status
- * @throws Catches and displays errors with red chalk formatting
- * @example
- * await viewStatus() // Shows full system status with metrics
- */
-async function viewStatus() {
-  const spinner = ora('Checking application status...').start();
-
-  try {
-    const [process, serverStats, apiHealth, dbHealth, redisHealth] = await Promise.all([
-      getPM2Status(),
-      getServerStats(),
-      checkAPIHealth(),
-      checkDatabaseStatus(),
-      checkRedisStatus()
-    ]);
-
-    spinner.stop();
-    console.clear();
-    displayHeader();
-
-    const status = serverStats.status;
-    displayStatus(status);
-
-    displaySystemStatus(process, apiHealth, dbHealth, redisHealth);
-    displayWebServiceTable(serverStats);
-    displayAPIStats(serverStats);
-
-  } catch (error) {
-    spinner.fail('Failed to check status');
-    console.error(chalk.red(error.message));
-  }
 }
 
 /**
@@ -507,88 +429,6 @@ async function viewLogs() {
 }
 
 /**
- * Prompts for confirmation and restarts the PM2 application process
- * @returns {Promise<void>} Resolves when restart operation completes or is cancelled
- * @sideEffects Shows confirmation prompt, executes PM2 restart command, displays spinner
- * @throws Catches and displays PM2 execution errors
- * @example
- * await restartApplication() // Shows confirmation then restarts if confirmed
- */
-async function restartApplication() {
-  const { confirm } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'confirm',
-      message: 'Are you sure you want to restart the application?',
-      default: false
-    }
-  ]);
-
-  if (!confirm) return;
-
-  const spinner = ora('Restarting application...').start();
-
-  try {
-    await execAsync(`pm2 restart ${CONFIG.appName}`);
-    spinner.succeed('Application restarted successfully');
-  } catch (error) {
-    spinner.fail('Failed to restart application');
-    console.error(chalk.red(error.message));
-  }
-}
-
-/**
- * Prompts for confirmation and stops the PM2 application process
- * @returns {Promise<void>} Resolves when stop operation completes or is cancelled
- * @sideEffects Shows confirmation prompt, executes PM2 stop command, displays spinner
- * @throws Catches and displays PM2 execution errors
- * @example
- * await stopApplication() // Shows confirmation then stops if confirmed
- */
-async function stopApplication() {
-  const { confirm } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'confirm',
-      message: 'Are you sure you want to stop the application?',
-      default: false
-    }
-  ]);
-
-  if (!confirm) return;
-
-  const spinner = ora('Stopping application...').start();
-
-  try {
-    await execAsync(`pm2 stop ${CONFIG.appName}`);
-    spinner.succeed('Application stopped successfully');
-  } catch (error) {
-    spinner.fail('Failed to stop application');
-    console.error(chalk.red(error.message));
-  }
-}
-
-/**
- * Starts the application using PM2 ecosystem configuration
- * @returns {Promise<void>} Resolves when start operation completes
- * @sideEffects Executes PM2 start command with ecosystem config, displays spinner
- * @throws Catches and displays PM2 execution errors
- * @example
- * await startApplication() // Starts app with ecosystem.config.js
- */
-async function startApplication() {
-  const spinner = ora('Starting application...').start();
-
-  try {
-    await execAsync(`pm2 start ecosystem.config.js`);
-    spinner.succeed('Application started successfully');
-  } catch (error) {
-    spinner.fail('Failed to start application');
-    console.error(chalk.red(error.message));
-  }
-}
-
-/**
  * Prompts for confirmation and clears all PM2 application logs
  * @returns {Promise<void>} Resolves when log clearing completes or is cancelled
  * @sideEffects Shows confirmation prompt, executes PM2 flush command, displays spinner
@@ -620,28 +460,6 @@ async function clearLogs() {
 }
 
 /**
- * Displays current dashboard configuration settings in a formatted box
- * @returns {void} Outputs configuration details to console
- * @sideEffects Writes to stdout with boxen formatting and emoji icons
- * @throws Does not throw - handles undefined environment variables gracefully
- * @example
- * showConfiguration() // Shows API URL, app name, log path, and environment
- */
-function showConfiguration() {
-  const config = [
-    `🌐 API Base URL: ${CONFIG.apiBaseUrl}`,
-    `📱 App Name: ${CONFIG.appName}`,
-    `📁 Log Path: ${CONFIG.logPath}`,
-    `🔧 Environment: ${process.env.NODE_ENV || 'development'}`
-  ];
-
-  console.log(boxen(
-    config.join('\n'),
-    { padding: 1, borderColor: 'magenta', title: 'Configuration' }
-  ));
-}
-
-/**
  * Main dashboard loop that handles menu navigation and action execution
  * @returns {Promise<void>} Never resolves - runs until exit action or process termination
  * @sideEffects Clears console, shows menus, executes actions, waits for user input
@@ -658,29 +476,14 @@ async function main() {
       const action = await showMainMenu();
 
       switch (action) {
-        case 'status':
-          await viewStatus();
-          break;
         case 'realtime':
           await realtimeMonitor();
           break;
         case 'logs':
           await viewLogs();
           break;
-        case 'restart':
-          await restartApplication();
-          break;
-        case 'stop':
-          await stopApplication();
-          break;
-        case 'start':
-          await startApplication();
-          break;
         case 'clear-logs':
           await clearLogs();
-          break;
-        case 'config':
-          showConfiguration();
           break;
         case 'exit':
           console.log(chalk.blue('👋 Goodbye!'));
