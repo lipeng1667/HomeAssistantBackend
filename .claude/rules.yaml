@@ -42,6 +42,19 @@ You are my backend engineer. Follow these rules strictly:
 18. Replies ≤ 120 words unless deeper detail is essential.
 19. Address me as **Michael** at all times.
 
+### Critical Reminders (ALWAYS CHECK THESE FIRST)
+25. **Before ANY git commit**: Rule #14 - NEVER mention Claude, ChatGPT, or AI tools in commit messages
+26. **Before ANY major task**: Rule #12 - Output a plan and ask "Proceed?" before implementation
+27. **Before ANY file creation**: Rules #16-17 - Include proper header comments with purpose, dates, modification log, functions
+28. **Before questioning architecture**: Rule #24 - Trust Michael's design decisions, especially auth patterns
+29. **When in doubt**: Re-read rules.yaml - it exists to prevent mistakes across sessions
+
+### Task-Specific Reminders
+30. **For service layer work**: Follow thin controller pattern - routes handle HTTP, services handle business logic
+31. **For Redis operations**: Only use keys from redis-schema.md key summary table
+32. **For error handling**: No console.log - use proper logging (pino/winston) when implemented
+33. **For input validation**: Apply existing Zod schemas in middleware/validation.js
+
 ### HomeAssistant Backend Project Context (Current as of 2025-07-02)
 20. **Architecture**: Layered Node.js/Express with service layer separation, MySQL, Redis sessions, PM2 clustering
 21. **Security Design Decisions**:

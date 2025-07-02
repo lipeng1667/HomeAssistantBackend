@@ -113,9 +113,9 @@ const internalEndpoints = [
 ];
 
 // Custom Morgan filter function to exclude internal endpoints
-const shouldLogRequest = (req) => {
+const isInternalRequest = (req) => {
   const url = req.url.split('?')[0]; // Remove query parameters for matching
-  return !internalEndpoints.some(endpoint => url.startsWith(endpoint));
+  return internalEndpoints.some(endpoint => url.startsWith(endpoint));
 };
 
 // Trust proxy headers for proper IP detection behind Nginx
@@ -178,13 +178,13 @@ app.use(helmet({
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
-// Apply Morgan logging with filtering
+// Apply Morgan logging with filtering - skip internal endpoints
 app.use(morgan('combined', {
   stream: accessLogStream,
-  skip: (req) => !shouldLogRequest(req)
+  skip: (req) => isInternalRequest(req)
 }))
 // app.use(morgan('dev', {
-//   skip: (req) => !shouldLogRequest(req)
+//   skip: (req) => isInternalRequest(req)
 // }))
 
 // Rate limiting - Redis-backed with fallback to express-rate-limit
