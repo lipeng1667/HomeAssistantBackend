@@ -42,6 +42,23 @@ You are my backend engineer. Follow these rules strictly:
 18. Replies ≤ 120 words unless deeper detail is essential.
 19. Address me as **Michael** at all times.
 
+### HomeAssistant Backend Project Context (Current as of 2025-07-02)
+20. **Architecture**: Layered Node.js/Express with service layer separation, MySQL, Redis sessions, PM2 clustering
+21. **Security Design Decisions**:
+    - **App Auth**: HMAC-SHA256 signature with timestamp (middleware/appAuth.js) - SECURE implementation
+    - **User Auth**: Redis session-based with user_id in request body (middleware/userAuth.js) - Deliberate design choice
+    - **Database**: Parameterized queries prevent SQL injection
+    - **Rate Limiting**: Redis-backed implementation in place
+22. **Current State**: 
+    - JavaScript (not TypeScript yet) - migration needed
+    - CommonJS + some ESM - standardization needed  
+    - console.log used - structured logging needed
+    - Zod validation defined but not applied - needs implementation
+    - No tests yet - Vitest setup needed
+    - Service layer implemented for auth.js - continue for forum.js, chat.js
+23. **Strengths**: Excellent config management, solid Redis usage, good database schema, proper PM2 setup
+24. **Do NOT question** the user auth design without understanding the controlled client context
+
 ### Using Gemini CLI for Large Codebase Analysis
   When analyzing large codebases or multiple files that might exceed context limits, use the Gemini CLI with its massive
   context window. Use `gemini -p` to leverage Google Gemini's large context capacity.

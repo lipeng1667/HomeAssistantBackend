@@ -1,35 +1,38 @@
 /**
  * @file routes/auth.js
- * @description Redis-based authentication routes for APP user login and logout
+ * @description HTTP routes for user authentication with service layer delegation
  * @author Michael Lee
  * @created 2025-06-17
- * @modified 2025-07-01
+ * @modified 2025-07-02
  * 
- * This file handles user authentication routes including anonymous login
- * and logout functionality using Redis sessions.
+ * This file provides HTTP endpoint handlers for user authentication, delegating
+ * business logic to the authentication service layer. Focuses on request/response
+ * handling, validation, and error management.
  * 
  * Modification Log:
  * - 2025-06-17: Initial implementation with Redis sessions
  * - 2025-07-01: Complete rewrite to use Redis sessions
  * - 2025-07-01: Added Redis session creation and management
+ * - 2025-07-02: Refactored to use service layer architecture
  * 
  * Functions:
- * - POST /api/auth/anonymous: Anonymous login with Redis session creation
- * - POST /api/auth/logout: User logout with Redis session deletion
+ * - POST /api/auth/anonymous: Anonymous login endpoint handler
+ * - POST /api/auth/logout: User logout endpoint handler
  * 
  * Dependencies:
- * - express: Web framework
- * - mysql2: Database operations
- * - config/redis.js: Redis client for session management
+ * - express: Web framework for HTTP routing
+ * - services/authService: Authentication business logic layer
+ * - middleware/userAuth: User authentication middleware
  * 
- * Redis Schema:
- * - ha:user:{user_id}: HASH containing session and user data
+ * Architecture:
+ * - Thin controller pattern - minimal logic in routes
+ * - Service layer delegation for business operations
+ * - Clear separation of HTTP concerns from business logic
  */
 
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/database');
-const redisClient = require('../config/redis.js');
+const authService = require('../services/authService');
 const { authenticateUser } = require('../middleware/userAuth');
 
 /**
@@ -59,80 +62,14 @@ router.post('/anonymous', async (req, res) => {
       });
     }
 
-    // Check if user exists
-    const [existingUsers] = await pool.execute(
-      'SELECT * FROM users WHERE device_id = ? AND status = 0',
-      [device_id]
-    );
-
-    let userId;
-
-    if (existingUsers.length === 0) {
-      // Begin transaction for user creation and logging
-      const connection = await pool.getConnection();
-      try {
-        await connection.beginTransaction();
-
-        // Create new user
-        const [result] = await connection.execute(
-          'INSERT INTO users (device_id) VALUES (?)',
-          [device_id]
-        );
-        userId = result.insertId;
-
-        // Log the login activity
-        await connection.execute(
-          'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 0, "anonymous_login")',
-          [userId]
-        );
-
-        await connection.commit();
-      } catch (error) {
-        await connection.rollback();
-        throw error;
-      } finally {
-        connection.release();
-      }
-    } else {
-      userId = existingUsers[0].id;
-
-      // Log the login activity for existing user
-      await pool.execute(
-        'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 0, "anonymous_login")',
-        [userId]
-      );
-    }
-
-    // Create Redis session
-    if (redisClient.isReady()) {
-      try {
-        const client = redisClient.getClient();
-        const userKey = redisClient.key(`user:${userId}`);
-        const now = Date.now().toString();
-        const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-
-        // Create session data
-        await client.hSet(userKey, {
-          device_id,
-          login_time: now,
-          last_seen: now,
-          active: 'true',
-          ip_address: clientIP
-        });
-
-        // Set TTL to 7 days
-        await client.expire(userKey, 604800);
-      } catch (redisError) {
-        console.error('Redis session creation failed:', redisError);
-        // Continue without Redis session - app will still work
-      }
-    }
+    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+    const result = await authService.anonymousLogin(device_id, clientIP);
 
     res.json({
       status: 'success',
       data: {
         user: {
-          id: userId
+          id: result.userId
         }
       }
     });
@@ -170,23 +107,7 @@ router.post('/logout', authenticateUser, async (req, res) => {
   try {
     const userId = req.user.id; // From auth middleware
 
-    // Delete Redis session
-    if (redisClient.isReady()) {
-      try {
-        const client = redisClient.getClient();
-        const userKey = redisClient.key(`user:${userId}`);
-        await client.del(userKey);
-      } catch (redisError) {
-        console.error('Redis session deletion failed:', redisError);
-        // Continue with logout even if Redis fails
-      }
-    }
-
-    // Log the logout activity
-    await pool.execute(
-      'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 3, "logout")',
-      [userId]
-    );
+    await authService.userLogout(userId);
 
     res.json({
       status: 'success',

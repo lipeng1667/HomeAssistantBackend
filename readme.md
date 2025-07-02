@@ -15,6 +15,42 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 - **Real-time Performance Monitoring** with connection tracking
 - **CLI Dashboard** for comprehensive system monitoring
 - **Database Optimization** with connection pooling
+- **Service Layer Architecture** with clean separation of concerns
+
+## Architecture
+
+The backend follows a **layered architecture** pattern with clear separation of concerns:
+
+### 🏗️ Service Layer Pattern
+
+- **Routes**: Thin HTTP controllers handling request/response
+- **Services**: Business logic and data access operations  
+- **Middleware**: Authentication, validation, rate limiting
+- **Config**: Centralized configuration management
+
+### 📂 Directory Structure
+
+```text
+├── routes/           # HTTP endpoint handlers
+├── services/         # Business logic layer
+├── middleware/       # Request processing middleware
+├── config/           # Configuration and connections
+├── logs/             # Application logs
+└── database.sql      # Database schema
+```
+
+### 🔄 Request Flow
+
+```text
+HTTP Request → Middleware → Routes → Services → Database/Redis
+```
+
+This architecture ensures:
+
+- **Testability**: Business logic isolated from HTTP concerns
+- **Maintainability**: Clear separation of responsibilities  
+- **Reusability**: Services can be used across multiple routes
+- **Scalability**: Easy to modify or extend individual layers
 
 ## Prerequisites
 
@@ -26,26 +62,26 @@ A robust backend system for the Home Assistant Platform, providing APIs for user
 
 ## Local Development Setup
 
-1. Clone the repository:
+1.Clone the repository:
 
 ```bash
 git clone [repository-url]
 cd HomeAssistantBackend
 ```
 
-2. Install dependencies:
+2.Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Create a `.env` file based on `.env.example`:
+3.Create a `.env` file based on `.env.example`:
 
 ```bash
 cp .env.example .env
 ```
 
-4. Configure your environment variables in `.env`:
+4.Configure your environment variables in `.env`:
 
 ```env
 # Server Configuration
@@ -80,7 +116,7 @@ LOG_LEVEL=info
 LOG_FORMAT=combined
 ```
 
-5. Install and start MariaDB and Redis:
+5.Install and start MariaDB and Redis:
 
 ```bash
 # For macOS
@@ -101,7 +137,7 @@ sudo systemctl enable redis-server
 # Download Redis from https://redis.io/download
 ```
 
-6. Set up the database:
+6.Set up the database:
 
 ```bash
 # Create database and user
@@ -116,7 +152,7 @@ exit;
 mariadb -u your_db_user -p HomeAssistant < database.sql
 ```
 
-7. Start the development server:
+7.Start the development server:
 
 ```bash
 npm run dev
@@ -124,13 +160,13 @@ npm run dev
 
 ## Remote Server Deployment
 
-1. SSH into your remote server:
+1.SSH into your remote server:
 
 ```bash
 ssh user@your-server-ip
 ```
 
-2. Install Node.js, MariaDB, and Redis if not already installed:
+2.Install Node.js, MariaDB, and Redis if not already installed:
 
 ```bash
 # For Ubuntu/Debian
@@ -143,7 +179,7 @@ sudo yum install nodejs npm mariadb-server redis
 sudo systemctl enable mariadb redis
 ```
 
-3. Start and secure MariaDB and Redis:
+3.Start and secure MariaDB and Redis:
 
 ```bash
 # Start services
@@ -160,33 +196,33 @@ sudo nano /etc/redis/redis.conf
 sudo systemctl restart redis-server
 ```
 
-4. Clone the repository:
+4.Clone the repository:
 
 ```bash
 git clone [repository-url]
 cd HomeAssistantBackend
 ```
 
-5. Install dependencies:
+5.Install dependencies:
 
 ```bash
 npm install
 ```
 
-6. Create and configure `.env` file:
+6.Create and configure `.env` file:
 
 ```bash
 cp .env.example .env
 nano .env  # Edit with your production settings
 ```
 
-7. Set up the database:
+7.Set up the database:
 
 ```bash
 mariadb -u your_db_user -p your_db_name < database.sql
 ```
 
-8. Start the production server:
+8.Start the production server:
 
 ```bash
 npm start
@@ -196,13 +232,13 @@ npm start
 
 For better process management in production:
 
-1. Install PM2 globally:
+1.Install PM2 globally:
 
 ```bash
 npm install -g pm2
 ```
 
-2. Start the application with PM2:
+2.Start the application with PM2:
 
 ```bash
 # Using ecosystem config (recommended)
@@ -212,7 +248,7 @@ npm run pm2:start
 pm2 start ecosystem.config.js
 ```
 
-3. Other useful PM2 commands:
+3.Other useful PM2 commands:
 
 ```bash
 npm run pm2:status                    # Check application status
@@ -231,7 +267,7 @@ pm2 stop home-assistant-backend       # Stop application
 
 The project includes a comprehensive CLI dashboard for monitoring and managing the backend application.
 
-### Features
+### Dashboard Features
 
 - 📊 **Real-time application status monitoring** with Redis-based cluster metrics
 - 🔗 **HTTP connection tracking** across all PM2 instances
@@ -246,26 +282,27 @@ The project includes a comprehensive CLI dashboard for monitoring and managing t
 
 ### Usage
 
-1. Install dependencies:
+1.Install dependencies:
 
 ```bash
 npm install
 ```
 
-2. Start the CLI dashboard:
+2.Start the CLI dashboard:
 
 ```bash
 npm run dashboard
 ```
 
-3. Use the interactive menu to:
-   - **View cluster-wide application status** and health checks
-   - **Monitor real-time performance metrics** (connections, speed, error rates)
-   - **Analyze endpoint performance** with error tracking
-   - **View distributed metrics** across all PM2 instances
-   - **View and manage logs** with filtering
-   - **Control application lifecycle** with PM2 integration
-   - **View configuration settings** and Redis status
+3.Use the interactive menu to:
+
+- **View cluster-wide application status** and health checks
+- **Monitor real-time performance metrics** (connections, speed, error rates)
+- **Analyze endpoint performance** with error tracking
+- **View distributed metrics** across all PM2 instances
+- **View and manage logs** with filtering
+- **Control application lifecycle** with PM2 integration
+- **View configuration settings** and Redis status
 
 ### Dashboard Commands
 
@@ -327,15 +364,15 @@ request.setValue(signature, forHTTPHeaderField: "X-Signature")
 ## Security Considerations
 
 1. **Always use HTTPS in production**
-3. **Secure your iOS app secret** - never expose in client code, use secure key storage
-4. **Secure your Redis instance** with authentication and network restrictions
-5. **Regularly update dependencies** and security patches
-6. **Monitor rate limiting** and adjust thresholds as needed
-7. **Keep MariaDB and Redis servers secure** and updated
-8. **Regularly backup your database** and Redis data if persistence is enabled
-9. **Use strong passwords** for database and Redis authentication
-10. **Implement network firewalls** to restrict database and Redis access
-11. **Monitor application metrics** for unusual patterns or attacks
+2. **Secure your iOS app secret** - never expose in client code, use secure key storage
+3. **Secure your Redis instance** with authentication and network restrictions
+4. **Regularly update dependencies** and security patches
+5. **Monitor rate limiting** and adjust thresholds as needed
+6. **Keep MariaDB and Redis servers secure** and updated
+7. **Regularly backup your database** and Redis data if persistence is enabled
+8. **Use strong passwords** for database and Redis authentication
+9. **Implement network firewalls** to restrict database and Redis access
+10. **Monitor application metrics** for unusual patterns or attacks
 
 ### Redis Security
 
@@ -370,6 +407,7 @@ This repository includes:
 - 🛠️ **RESTful API Endpoints** for app and admin
 - 🔐 Authentication (Anonymous + Admin login)
 - 🧾 User Activity Logging
+- 🏗️ **Service Layer Architecture** with business logic separation
 
 ---
 
@@ -469,14 +507,3 @@ This application uses Redis for distributed metrics collection across PM2 cluste
 See `redis-schema.md` for complete documentation of Redis keys and data structures.
 
 ---
-
-## 📌 TODO
-
-- [x] **Rate limiting and abuse prevention** (Redis-based distributed)
-- [x] **Real-time metrics collection** (Redis cluster-wide)
-- [x] **Performance monitoring dashboard** (CLI with comprehensive stats)
-- [x] **Admin dashboard UI** (Web-based interface)
-- [ ] **WebSocket support** for real-time IM
-- [ ] **Redis persistence configuration** for production
-- [ ] **Grafana integration** for advanced analytics
-- [ ] **Alert system** for performance thresholds
