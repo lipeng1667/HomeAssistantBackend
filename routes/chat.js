@@ -21,7 +21,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
-const { authenticateUser } = require('../middleware/auth');
+const { authenticateUser } = require('../middleware/userAuth');
 
 /**
  * @description Get chat history for the authenticated user

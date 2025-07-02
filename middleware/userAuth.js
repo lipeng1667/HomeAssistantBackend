@@ -1,5 +1,5 @@
 /**
- * @file middleware/auth.js
+ * @file middleware/userAuth.js
  * @description Redis-based session authentication middleware for APP user routes
  * @author Michael Lee
  * @created 2025-06-17

@@ -62,7 +62,7 @@ const morgan = require('morgan')
 const rateLimit = require('express-rate-limit')
 const config = require('./config')
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler')
-const { localhostOnly } = require('./middleware/auth')
+const { localhostOnly } = require('./middleware/userAuth')
 const fs = require('fs')
 const path = require('path')
 

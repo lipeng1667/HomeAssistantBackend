@@ -5,4 +5,4 @@
 - logs/access.log logic review
 - [x]JWT secret methods needed?
 - Reset webservice stat datas when npm run pm2:restart
-- modify file name in middleware/auth.js to userAuth.js
+- [x]modify file name in middleware/auth.js to userAuth.js
