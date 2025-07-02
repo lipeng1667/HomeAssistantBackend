@@ -10,9 +10,11 @@
 ## Test for APIs
 
 - /auth/anonymous
- curl -X POST <http://47.94.108.189:10000/api/auth/anonymous> \
-    -H "Content-Type: application/json" \
-    -H "X-Timestamp: 1751468434501" \
-    -H "X-Signature: d40dc7eaa13286b4051c9936f8f50364b6244be1a8b77
-  425baf226b01e632d07" \
-    -d '{"device_id": "test_device_123"}'
+
+```bash
+curl -X POST "http://47.94.108.189:10000/api/auth/anonymous" \
+  -H "Content-Type: application/json" \
+  -H "X-Timestamp: 1751474778984" \
+  -H "X-Signature: 33260bf9c60de648d281ff0047cf4ccfa075b850be1fb188ed02409cd521b4f7" \
+  -d '{"device_id": "test_device_123"}'
+```

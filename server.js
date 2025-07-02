@@ -256,7 +256,7 @@ const apiSlidingWindowLimiter = createApiSlidingWindowLimiter()
 app.use('/api', validateAppAuth, apiLimiter)
 
 // Routes
-app.use('/', localhostOnly, healthRoutes)
+app.use('/health', localhostOnly, healthRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/forum', forumRoutes)
 app.use('/api/chat', chatRoutes)

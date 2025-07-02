@@ -29,7 +29,7 @@ const { asyncHandler } = require('../middleware/errorHandler')
  * @route GET /health
  * @returns {Object} Health status
  */
-router.get('/health', (req, res) => {
+router.get('/', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -44,13 +44,13 @@ router.get('/health', (req, res) => {
  * @route GET /health/db
  * @returns {Object} Database connection status
  */
-router.get('/health/db', asyncHandler(async (req, res) => {
+router.get('/db', asyncHandler(async (req, res) => {
   const start = Date.now()
-  
+
   try {
     await pool.execute('SELECT 1 as health_check')
     const responseTime = Date.now() - start
-    
+
     res.json({
       status: 'healthy',
       database: 'connected',
@@ -59,7 +59,7 @@ router.get('/health/db', asyncHandler(async (req, res) => {
     })
   } catch (error) {
     const responseTime = Date.now() - start
-    
+
     res.status(503).json({
       status: 'unhealthy',
       database: 'disconnected',
@@ -75,7 +75,7 @@ router.get('/health/db', asyncHandler(async (req, res) => {
  * @route GET /health/detailed
  * @returns {Object} Detailed health information
  */
-router.get('/health/detailed', asyncHandler(async (req, res) => {
+router.get('/detailed', asyncHandler(async (req, res) => {
   const healthCheck = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
