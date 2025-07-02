@@ -128,7 +128,7 @@ mkdir -p logs
 
 # Start with PM2
 echo "🚀 Starting application with PM2..."
-pm2 start ecosystem.config.js
+npm run pm2:start
 pm2 save
 
 # Cleanup

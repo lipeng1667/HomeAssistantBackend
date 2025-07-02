@@ -105,11 +105,11 @@ const accessLogStream = fs.createWriteStream(
 
 // Define internal/system endpoints that should be filtered out from logs
 const internalEndpoints = [
-  '/health',
-  '/health/db',
-  '/health/detailed',
-  '/api/cli-stats',
-  '/favicon.ico'
+  '/health',        // Main health endpoint
+  '/health/db',     // Database health check
+  '/health/detailed', // Detailed health
+  '/api/cli-stats', // Dashboard stats
+  '/favicon.ico'    // Browser icon requests
 ];
 
 // Custom Morgan filter function to exclude internal endpoints
@@ -123,7 +123,6 @@ app.set('trust proxy', true);
 
 // === Redis-based Metrics System ===
 const serverStartTime = Date.now();
-let activeConnections = 0;
 
 // Use Redis metrics middleware when available
 app.use((req, res, next) => {
@@ -141,7 +140,6 @@ app.get('/api/cli-stats', localhostOnly, async (req, res) => {
       res.json({
         ...metrics,
         uptime: Math.round((Date.now() - serverStartTime) / 1000),
-        activeConnections,
         serverStartTime: new Date(serverStartTime).toISOString()
       });
     } else {
@@ -149,7 +147,7 @@ app.get('/api/cli-stats', localhostOnly, async (req, res) => {
       res.json({
         error: 'Metrics service not available',
         uptime: Math.round((Date.now() - serverStartTime) / 1000),
-        activeConnections,
+        activeConnections: 0,
         serverStartTime: new Date(serverStartTime).toISOString()
       });
     }
@@ -158,7 +156,7 @@ app.get('/api/cli-stats', localhostOnly, async (req, res) => {
     res.status(500).json({
       error: 'Failed to retrieve metrics',
       uptime: Math.round((Date.now() - serverStartTime) / 1000),
-      activeConnections
+      activeConnections: 0
     });
   }
 });
@@ -178,8 +176,25 @@ app.use(helmet({
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
-// Apply Morgan logging with filtering - skip internal endpoints
-app.use(morgan('combined', {
+// Custom Morgan format with local timezone and enhanced logging
+morgan.token('localdate', () => {
+  return new Date().toLocaleString('en-GB', {
+    timeZone: 'Asia/Shanghai',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).replace(/,/g, '');
+});
+
+// Enhanced Morgan format with response time, forwarded IPs, and API-specific data
+const logFormat = ':remote-addr - :req[x-forwarded-for] [:localdate +0800] ":method :url HTTP/:http-version" :status :res[content-length] :response-time ms ":referrer" ":user-agent" ":req[content-type]"';
+
+// Apply Morgan logging with filtering - skip internal endpoints  
+app.use(morgan(logFormat, {
   stream: accessLogStream,
   skip: (req) => isInternalRequest(req)
 }))
@@ -241,7 +256,7 @@ const apiSlidingWindowLimiter = createApiSlidingWindowLimiter()
 app.use('/api', validateAppAuth, apiLimiter)
 
 // Routes
-app.use('/health', localhostOnly, healthRoutes)
+app.use('/', localhostOnly, healthRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/forum', forumRoutes)
 app.use('/api/chat', chatRoutes)
@@ -271,16 +286,12 @@ server.on('connection', (socket) => {
     remoteAddress === '::ffff:127.0.0.1'; // IPv4-mapped IPv6
 
   if (!isLocalhost) {
-    activeConnections++;
-
     // Update Redis cluster-wide connection count
     if (global.metricsService) {
       global.metricsService.incrementConnections().catch(console.error);
     }
 
     socket.on('close', () => {
-      activeConnections--;
-
       // Update Redis cluster-wide connection count
       if (global.metricsService) {
         global.metricsService.decrementConnections().catch(console.error);

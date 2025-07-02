@@ -29,7 +29,7 @@ const { asyncHandler } = require('../middleware/errorHandler')
  * @route GET /health
  * @returns {Object} Health status
  */
-router.get('/', (req, res) => {
+router.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -44,7 +44,7 @@ router.get('/', (req, res) => {
  * @route GET /health/db
  * @returns {Object} Database connection status
  */
-router.get('/db', asyncHandler(async (req, res) => {
+router.get('/health/db', asyncHandler(async (req, res) => {
   const start = Date.now()
   
   try {
@@ -75,7 +75,7 @@ router.get('/db', asyncHandler(async (req, res) => {
  * @route GET /health/detailed
  * @returns {Object} Detailed health information
  */
-router.get('/detailed', asyncHandler(async (req, res) => {
+router.get('/health/detailed', asyncHandler(async (req, res) => {
   const healthCheck = {
     status: 'healthy',
     timestamp: new Date().toISOString(),

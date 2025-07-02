@@ -2,19 +2,19 @@
 
 /**
  * @file dashboard.mjs
- * @description CLI Dashboard for Home Assistant Backend Management with Redis metrics
+ * @description Real-time monitoring dashboard for Home Assistant Backend
  * @author Michael Lee
  * @created 2025-06-17
- * @modified 2025-06-27
+ * @modified 2025-07-02
  * 
- * This file provides a command-line interface for monitoring and managing
- * the Home Assistant backend application. It includes real-time monitoring
- * with Redis-based distributed metrics, log viewing, and management operations.
+ * Simplified dashboard that runs real-time monitoring directly when executed.
+ * Displays Redis-based distributed metrics with automatic 2-second refresh.
  * 
  * Modification Log:
  * - 2025-06-17: Initial CLI dashboard implementation
  * - 2025-06-27: Updated to display Redis-based cluster metrics
  * - 2025-06-27: Added connection tracking and request speed monitoring
+ * - 2025-07-02: Simplified to run realtimeMonitor directly, removed interactive menu
  * 
  * Functions:
  * - displayHeader(): Show dashboard title and branding
@@ -27,12 +27,7 @@
  * - checkAPIHealth(): Perform health check on main API endpoint
  * - checkDatabaseStatus(): Check database connectivity through health endpoint
  * - checkRedisStatus(): Verify Redis connectivity by checking metrics endpoint
- * - showMainMenu(): Display interactive main menu with dashboard action options
- * - viewStatus(): Execute comprehensive status check and display formatted results
  * - realtimeMonitor(): Start continuous real-time monitoring with 2-second refresh
- * - viewLogs(): Interactive log viewer with multiple log type options
- * - clearLogs(): Prompt for confirmation and clear all PM2 application logs
- * - main(): Main dashboard loop handling menu navigation and action execution
  * 
  * Dependencies:
  * - chalk: For colored terminal output
@@ -44,14 +39,10 @@
  */
 
 import chalk from 'chalk';
-import inquirer from 'inquirer';
-import ora from 'ora';
 import boxen from 'boxen';
 import axios from 'axios';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import fs from 'fs/promises';
-import path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -63,7 +54,6 @@ const CONFIG = {
 };
 
 // Utility functions
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0 Bytes';
@@ -272,34 +262,6 @@ function displayAPIStats(stats) {
 }
 
 
-/**
- * Displays interactive main menu with dashboard action options
- * @returns {Promise<string>} Selected action value from menu choices
- * @sideEffects Shows inquirer interactive menu, waits for user input
- * @throws May throw on inquirer input/output errors
- * @example
- * const action = await showMainMenu()
- * if (action === 'status') await viewStatus()
- */
-async function showMainMenu() {
-  const choices = [
-    { name: '📈 Real-time Monitor', value: 'realtime' },
-    { name: '📋 View Logs', value: 'logs' },
-    { name: '🗑️ Clear Logs', value: 'clear-logs' },
-    { name: '❌ Exit', value: 'exit' }
-  ];
-
-  const { action } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'action',
-      message: 'Select an action:',
-      choices
-    }
-  ]);
-
-  return action;
-}
 
 /**
  * Starts continuous real-time monitoring with 2-second refresh intervals
@@ -347,162 +309,8 @@ async function realtimeMonitor() {
   });
 }
 
-/**
- * Interactive log viewer with multiple log type options and automatic file discovery
- * @returns {Promise<void>} Resolves when log display is complete
- * @sideEffects Shows inquirer menu, reads filesystem, executes PM2 commands, displays logs
- * @throws Catches and displays file access and PM2 execution errors
- * @example
- * await viewLogs() // Shows log type menu and displays selected logs
- */
-async function viewLogs() {
-  const { logType } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'logType',
-      message: 'Select log type:',
-      choices: [
-        { name: '📄 Combined Logs', value: 'combined' },
-        { name: '✅ Output Logs', value: 'out' },
-        { name: '❌ Error Logs', value: 'error' },
-        { name: '📊 PM2 Logs', value: 'pm2' }
-      ]
-    }
-  ]);
 
-  const spinner = ora('Loading logs...').start();
 
-  try {
-    let logContent = '';
-
-    if (logType === 'pm2') {
-      const { stdout } = await execAsync(`pm2 logs ${CONFIG.appName} --lines 50 --nostream`);
-      logContent = stdout;
-    } else {
-      // Try to find PM2 numbered log files first
-      let logFile = path.join(CONFIG.logPath, `${logType}.log`);
-
-      try {
-        // Check if the direct log file exists
-        await fs.access(logFile);
-        logContent = await fs.readFile(logFile, 'utf8');
-      } catch {
-        // If not found, try to find numbered log files (PM2 format)
-        try {
-          const logDir = await fs.readdir(CONFIG.logPath);
-          const numberedLogs = logDir
-            .filter(file => file.startsWith(`${logType}-`) && file.endsWith('.log'))
-            .sort((a, b) => {
-              const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-              const numB = parseInt(b.match(/\d+/)?.[0] || '0');
-              return numB - numA; // Newest first
-            });
-
-          if (numberedLogs.length > 0) {
-            // Read the most recent numbered log file
-            const latestLog = path.join(CONFIG.logPath, numberedLogs[0]);
-            logContent = await fs.readFile(latestLog, 'utf8');
-          } else {
-            throw new Error(`No ${logType} log files found`);
-          }
-        } catch {
-          throw new Error(`No ${logType} log files found`);
-        }
-      }
-
-      logContent = logContent.split('\n').slice(-50).join('\n'); // Last 50 lines
-    }
-
-    spinner.stop();
-    console.clear();
-    displayHeader();
-
-    console.log(boxen(
-      chalk.gray(logContent),
-      { padding: 1, borderColor: 'green', title: `${logType.toUpperCase()} Logs` }
-    ));
-
-  } catch (error) {
-    spinner.fail('Failed to load logs');
-    console.error(chalk.red(error.message));
-  }
-}
-
-/**
- * Prompts for confirmation and clears all PM2 application logs
- * @returns {Promise<void>} Resolves when log clearing completes or is cancelled
- * @sideEffects Shows confirmation prompt, executes PM2 flush command, displays spinner
- * @throws Catches and displays PM2 execution errors
- * @example
- * await clearLogs() // Shows confirmation then clears logs if confirmed
- */
-async function clearLogs() {
-  const { confirm } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'confirm',
-      message: 'Are you sure you want to clear all logs?',
-      default: false
-    }
-  ]);
-
-  if (!confirm) return;
-
-  const spinner = ora('Clearing logs...').start();
-
-  try {
-    await execAsync(`pm2 flush ${CONFIG.appName}`);
-    spinner.succeed('Logs cleared successfully');
-  } catch (error) {
-    spinner.fail('Failed to clear logs');
-    console.error(chalk.red(error.message));
-  }
-}
-
-/**
- * Main dashboard loop that handles menu navigation and action execution
- * @returns {Promise<void>} Never resolves - runs until exit action or process termination
- * @sideEffects Clears console, shows menus, executes actions, waits for user input
- * @throws Catches and displays errors, waits 2 seconds before continuing
- * @example
- * await main() // Starts interactive dashboard interface
- */
-async function main() {
-  console.clear();
-  displayHeader();
-
-  while (true) {
-    try {
-      const action = await showMainMenu();
-
-      switch (action) {
-        case 'realtime':
-          await realtimeMonitor();
-          break;
-        case 'logs':
-          await viewLogs();
-          break;
-        case 'clear-logs':
-          await clearLogs();
-          break;
-        case 'exit':
-          console.log(chalk.blue('👋 Goodbye!'));
-          process.exit(0);
-      }
-
-      if (action !== 'realtime') {
-        console.log(chalk.gray('\nPress Enter to continue...'));
-        await new Promise(resolve => process.stdin.once('data', resolve));
-        console.clear();
-        displayHeader();
-      }
-
-    } catch (error) {
-      console.error(chalk.red('An error occurred:', error.message));
-      await sleep(2000);
-    }
-  }
-}
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
@@ -515,7 +323,7 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Start the dashboard
+// Start real-time monitoring directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
+  realtimeMonitor().catch(console.error);
 }

@@ -47,7 +47,6 @@ const metricsMiddleware = (req, res, next) => {
     return next()
   }
 
-  const startTime = Date.now()
   const endpoint = req.route?.path || req.path || 'unknown'
   const method = req.method
 
@@ -56,12 +55,8 @@ const metricsMiddleware = (req, res, next) => {
 
   // Override res.end to capture response metrics
   const originalEnd = res.end
-  res.end = function(...args) {
-    const responseTime = Date.now() - startTime
+  res.end = function (...args) {
     const statusCode = res.statusCode
-
-    // Record response time
-    metricsService.recordResponseTime(`${method} ${endpoint}`, responseTime).catch(console.error)
 
     // Track accepted vs total requests
     if (statusCode < 400) {
