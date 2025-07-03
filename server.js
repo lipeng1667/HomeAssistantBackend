@@ -105,7 +105,7 @@ const accessLogStream = fs.createWriteStream(
 
 // Define internal/system endpoints that should be filtered out from logs
 const internalEndpoints = [
-  '/health',        // Main health endpoint
+  '/health/api',        // Main health endpoint
   '/health/db',     // Database health check
   '/health/detailed', // Detailed health
   '/api/cli-stats', // Dashboard stats
@@ -195,10 +195,10 @@ morgan.token('response-time-int', function (req, res) {
   if (!req._startAt || !res._startAt) {
     return '-'
   }
-  
+
   const ms = (res._startAt[0] - req._startAt[0]) * 1e3 +
     (res._startAt[1] - req._startAt[1]) * 1e-6
-  
+
   return Math.floor(ms).toString()
 })
 

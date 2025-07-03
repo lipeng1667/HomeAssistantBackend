@@ -37,7 +37,7 @@ rsync -av --exclude='node_modules' \
          --exclude='.gitignore' \
          --exclude='deploy.sh' \
          --exclude='README.md' \
-         --exclude='Test'\
+         --exclude='scripts'\
          --exclude='.DS_Store' \
          $LOCAL_DIR/ $TEMP_DIR/
 

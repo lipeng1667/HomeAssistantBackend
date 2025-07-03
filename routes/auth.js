@@ -83,13 +83,14 @@ router.post('/anonymous', async (req, res) => {
 });
 
 /**
- * @description User logout endpoint with Redis session deletion
+ * @description User logout endpoint with Redis session deletion and validation
  * @async
  * @function logout
  * @route POST /api/auth/logout
  * 
  * @param {Object} req.body
  * @param {number} req.body.user_id - User ID (required for session deletion)
+ * @param {string} req.body.device_id - Device ID (required for validation)
  * @param {Object} req.user - User object from auth middleware
  * @param {number} req.user.id - User ID
  * 
@@ -97,17 +98,34 @@ router.post('/anonymous', async (req, res) => {
  * @returns {string} Response.status - Success/error status
  * @returns {string} Response.message - Success message
  * 
+ * @throws {400} If device_id is missing
  * @throws {500} If server error occurs
  * 
  * @sideEffects
+ * - Validates session status and device_id before deletion
  * - Deletes Redis session for the user
  * - Logs logout activity in database
  */
 router.post('/logout', authenticateUser, async (req, res) => {
   try {
     const userId = req.user.id; // From auth middleware
+    const { device_id } = req.body;
 
-    await authService.userLogout(userId);
+    if (!device_id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter is required'
+      });
+    }
+
+    const result = await authService.userLogout(userId, device_id);
+
+    if (!result.sessionDeleted) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Session validation failed or session not found'
+      });
+    }
 
     res.json({
       status: 'success',

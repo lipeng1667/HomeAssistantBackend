@@ -1,24 +1,33 @@
 /**
  * @file services/authService.js
- * @description Authentication service layer for user management and session handling
+ * @description Authentication service layer for anonymous user management and session handling
  * @author Michael Lee
  * @created 2025-07-02
- * @modified 2025-07-02
+ * @modified 2025-07-03
  * 
- * This service provides authentication business logic including user creation,
- * session management, and activity logging separated from HTTP concerns.
+ * This service provides authentication business logic including anonymous user creation,
+ * secure session management, and activity logging separated from HTTP concerns.
  * 
  * Modification Log:
  * - 2025-07-02: Initial implementation extracted from routes/auth.js
+ * - 2025-07-03: Enhanced session security with status and device_id validation
+ * - 2025-07-03: Renamed createUserSession to createAnonymousUserSession
+ * - 2025-07-03: Added comprehensive validation to deleteUserSession
  * 
  * Functions:
  * - findUserByDeviceId(deviceId): Find user by device identifier
  * - createUserWithLog(deviceId): Create new user with activity log
  * - logUserActivity(userId, actionType, action): Log user activity
- * - createUserSession(userId, deviceId, clientIP): Create Redis session
- * - deleteUserSession(userId): Delete Redis session
+ * - createAnonymousUserSession(userId, deviceId, clientIP): Create Redis session for anonymous users
+ * - deleteUserSession(userId, deviceId): Delete Redis session with validation
  * - anonymousLogin(deviceId, clientIP): Handle anonymous login flow
- * - userLogout(userId): Handle user logout flow
+ * - userLogout(userId, deviceId): Handle user logout flow with validation
+ * 
+ * Security Features:
+ * - Anonymous user status tracking in Redis sessions
+ * - Device ID validation for session operations
+ * - Secure session deletion with multiple validation checks
+ * - Activity logging for audit trails
  * 
  * Dependencies:
  * - config/database.js: MySQL connection pool
@@ -43,7 +52,7 @@ class AuthService {
       'SELECT * FROM users WHERE device_id = ? AND status = 0',
       [deviceId]
     );
-    
+
     return existingUsers.length > 0 ? existingUsers[0] : null;
   }
 
@@ -58,7 +67,7 @@ class AuthService {
    */
   async createUserWithLog(deviceId) {
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
 
@@ -104,9 +113,9 @@ class AuthService {
   }
 
   /**
-   * Create Redis session for user
+   * Create Redis session for anonymous user 
    * @async
-   * @function createUserSession
+   * @function createAnonymousUserSession
    * @param {number} userId - User ID for session
    * @param {string} deviceId - Device identifier
    * @param {string} clientIP - Client IP address
@@ -114,7 +123,7 @@ class AuthService {
    * @throws Does not throw - logs errors and returns false
    * @sideEffects Creates Redis hash with 7-day TTL
    */
-  async createUserSession(userId, deviceId, clientIP) {
+  async createAnonymousUserSession(userId, deviceId, clientIP) {
     if (!redisClient.isReady()) {
       console.warn('Redis not available for session creation');
       return false;
@@ -130,7 +139,7 @@ class AuthService {
         device_id: deviceId,
         login_time: now,
         last_seen: now,
-        active: 'true',
+        status: 'anonymous',
         ip_address: clientIP || 'unknown'
       });
 
@@ -147,12 +156,13 @@ class AuthService {
    * Delete Redis session for user
    * @async
    * @function deleteUserSession
-   * @param {number} userId - User ID to delete session for
+   * @param {number} userId - User ID to delete session fo
+   * @param {string} deviceId - device ID to logoutr
    * @returns {Promise<boolean>} True if session deleted successfully
    * @throws Does not throw - logs errors and returns false
    * @sideEffects Removes Redis session data
    */
-  async deleteUserSession(userId) {
+  async deleteUserSession(userId, deviceId) {
     if (!redisClient.isReady()) {
       console.warn('Redis not available for session deletion');
       return false;
@@ -161,6 +171,29 @@ class AuthService {
     try {
       const client = redisClient.getClient();
       const userKey = redisClient.key(`user:${userId}`);
+
+      // Get current session data to validate
+      const sessionData = await client.hGetAll(userKey);
+
+      // Check if session exists
+      if (!sessionData.device_id) {
+        console.warn(`Session not found for user ${userId}`);
+        return false;
+      }
+
+      // Validate status is 'anonymous'
+      if (sessionData.status !== 'anonymous') {
+        console.warn(`Invalid session status for user ${userId}: ${sessionData.status}`);
+        return false;
+      }
+
+      // Validate device_id matches
+      if (sessionData.device_id !== deviceId) {
+        console.warn(`Device ID mismatch for user ${userId}: expected ${sessionData.device_id}, got ${deviceId}`);
+        return false;
+      }
+
+      // All validations passed, delete the session
       await client.del(userKey);
       return true;
     } catch (redisError) {
@@ -185,7 +218,7 @@ class AuthService {
   async anonymousLogin(deviceId, clientIP) {
     // Check if user exists
     const existingUser = await this.findUserByDeviceId(deviceId);
-    
+
     let userId;
     let isNewUser = false;
 
@@ -195,13 +228,13 @@ class AuthService {
       isNewUser = true;
     } else {
       userId = existingUser.id;
-      
+
       // Log login activity for existing user
       await this.logUserActivity(userId, 0, 'anonymous_login');
     }
 
     // Create Redis session
-    const sessionCreated = await this.createUserSession(userId, deviceId, clientIP);
+    const sessionCreated = await this.createAnonymousUserSession(userId, deviceId, clientIP);
 
     return {
       userId,
@@ -215,6 +248,7 @@ class AuthService {
    * @async
    * @function userLogout
    * @param {number} userId - User ID to logout
+   * @param {string} deviceId - device ID to logout
    * @returns {Promise<Object>} Logout result
    * @throws {Error} Database or business logic errors
    * @sideEffects Deletes Redis session, logs logout activity
@@ -222,9 +256,9 @@ class AuthService {
    * const result = await authService.userLogout(123)
    * // Returns: { sessionDeleted: true, activityLogged: true }
    */
-  async userLogout(userId) {
+  async userLogout(userId, deviceId) {
     // Delete Redis session
-    const sessionDeleted = await this.deleteUserSession(userId);
+    const sessionDeleted = await this.deleteUserSession(userId, deviceId);
 
     // Log logout activity
     await this.logUserActivity(userId, 3, 'logout');
