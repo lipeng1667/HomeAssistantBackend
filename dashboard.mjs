@@ -111,7 +111,7 @@ async function getServerStats() {
  */
 async function checkAPIHealth() {
   try {
-    const response = await axios.get(`${CONFIG.apiBaseUrl}/health`, { timeout: 5000 });
+    const response = await axios.get(`${CONFIG.apiBaseUrl}/health/api`, { timeout: 5000 });
     return { status: 'healthy', response: response.data };
   } catch (error) {
     return { status: 'unhealthy', error: error.message };

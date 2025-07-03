@@ -190,8 +190,20 @@ morgan.token('localdate', () => {
   }).replace(/,/g, '');
 });
 
+// Custom token to truncate response time to integer
+morgan.token('response-time-int', function (req, res) {
+  if (!req._startAt || !res._startAt) {
+    return '-'
+  }
+  
+  const ms = (res._startAt[0] - req._startAt[0]) * 1e3 +
+    (res._startAt[1] - req._startAt[1]) * 1e-6
+  
+  return Math.floor(ms).toString()
+})
+
 // Enhanced Morgan format with response time, forwarded IPs, and API-specific data
-const logFormat = ':remote-addr - :req[x-forwarded-for] [:localdate +0800] ":method :url HTTP/:http-version" :status :res[content-length] :response-time ms ":referrer" ":user-agent" ":req[content-type]"';
+const logFormat = ':remote-addr - :req[x-forwarded-for] [:localdate +0800] ":method :url HTTP/:http-version" :status :res[content-length] :response-time-int ms ":referrer" ":user-agent" ":req[content-type]"';
 
 // Apply Morgan logging with filtering - skip internal endpoints  
 app.use(morgan(logFormat, {

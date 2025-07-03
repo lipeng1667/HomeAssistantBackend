@@ -26,10 +26,10 @@ const { asyncHandler } = require('../middleware/errorHandler')
 
 /**
  * Basic health check endpoint
- * @route GET /health
+ * @route GET /health/api
  * @returns {Object} Health status
  */
-router.get('/', (req, res) => {
+router.get('/api', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -75,7 +75,7 @@ router.get('/db', asyncHandler(async (req, res) => {
  * @route GET /health/detailed
  * @returns {Object} Detailed health information
  */
-router.get('/detailed', asyncHandler(async (req, res) => {
+router.get('/health/detailed', asyncHandler(async (req, res) => {
   const healthCheck = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
