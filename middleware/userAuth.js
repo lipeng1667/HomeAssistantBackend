@@ -83,7 +83,6 @@ const localhostOnly = (req, res, next) => {
  * 
  * @throws {400} If user_id is missing from request
  * @throws {401} If session not found or expired
- * @throws {401} If user is disabled (active !== "true")
  * @throws {500} If Redis error or server error occurs
  * 
  * @sideEffects 
@@ -134,14 +133,6 @@ const authenticateUser = async (req, res, next) => {
       return res.status(401).json({
         status: 'error',
         message: 'Session not found or expired'
-      });
-    }
-
-    // Check if user is active
-    if (userData.active !== 'true') {
-      return res.status(401).json({
-        status: 'error',
-        message: 'User account is disabled'
       });
     }
 

@@ -34,10 +34,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: config.database.connectionLimit,
   queueLimit: config.database.queueLimit,
-  acquireTimeout: config.database.acquireTimeout,
-  timeout: config.database.timeout,
   idleTimeout: config.database.idleTimeout,
-  reconnect: true,
   typeCast: true
 });
 

@@ -106,15 +106,15 @@ const accessLogStream = fs.createWriteStream(
 // Define internal/system endpoints that should be filtered out from logs
 const internalEndpoints = [
   '/health/api',        // Main health endpoint
-  '/health/db',     // Database health check
-  '/health/detailed', // Detailed health
-  '/api/cli-stats', // Dashboard stats
-  '/favicon.ico'    // Browser icon requests
+  '/health/db',         // Database health check
+  '/health/detailed',   // Detailed health
+  '/api/cli-stats',     // Dashboard stats
+  '/favicon.ico'        // Browser icon requests
 ];
 
 // Custom Morgan filter function to exclude internal endpoints
 const isInternalRequest = (req) => {
-  const url = req.url.split('?')[0]; // Remove query parameters for matching
+  const url = req.originalUrl || req.url;
   return internalEndpoints.some(endpoint => url.startsWith(endpoint));
 };
 
