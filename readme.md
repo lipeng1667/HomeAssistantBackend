@@ -269,52 +269,12 @@ The project includes a comprehensive CLI dashboard for monitoring and managing t
 
 ### Dashboard Features
 
-- 📊 **Real-time application status monitoring** with Redis-based cluster metrics
-- 🔗 **HTTP connection tracking** across all PM2 instances
-- ⚡ **Request processing speed** monitoring (current and maximum)
-- 📈 **Performance analytics** with request acceptance rates and error tracking
-- 📋 **Log viewing** (combined, output, error, PM2)
-- 🔄 **Application lifecycle management** (start/stop/restart)
-- 🗑️ **Log management** and clearing
-- 🔧 **Configuration viewing**
-- 📊 **Endpoint statistics** with error rates per API route
-- 🕐 **Time-series data** with hourly request aggregation
+📊 **Real-time application status monitoring** with Redis-based cluster metrics
 
-### Usage
-
-1.Install dependencies:
-
-```bash
-npm install
-```
-
-2.Start the CLI dashboard:
+Start the CLI dashboard:
 
 ```bash
 npm run dashboard
-```
-
-3.Use the interactive menu to:
-
-- **View cluster-wide application status** and health checks
-- **Monitor real-time performance metrics** (connections, speed, error rates)
-- **Analyze endpoint performance** with error tracking
-- **View distributed metrics** across all PM2 instances
-- **View and manage logs** with filtering
-- **Control application lifecycle** with PM2 integration
-- **View configuration settings** and Redis status
-
-### Dashboard Commands
-
-```bash
-# Start dashboard
-npm run dashboard
-
-# PM2 Management
-npm run pm2:start     # Start with PM2
-npm run pm2:stop      # Stop PM2 process
-npm run pm2:restart   # Restart PM2 process
-npm run pm2:delete    # Remove from PM2
 ```
 
 ## API Documentation
@@ -381,6 +341,122 @@ request.setValue(signature, forHTTPHeaderField: "X-Signature")
 - Consider Redis ACLs for fine-grained access control
 - Monitor Redis memory usage and set appropriate limits
 
+### Redis Persistence Configuration
+
+For production deployments, configure Redis persistence to prevent data loss:
+
+1.**Edit Redis configuration**:
+
+```bash
+sudo vim /etc/redis/redis.conf
+```
+
+2.**Configure RDB persistence** (recommended for session data):
+
+```bash
+# Point-in-time snapshots
+# Save if at least 1 key changed in 900 seconds
+save 900 1
+# Save if at least 10 keys changed in 300 seconds
+save 300 10
+# Save if at least 10000 keys changed in 60 seconds
+save 60 10000
+
+# RDB settings
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+dbfilename dump.rdb
+dir /var/lib/redis/
+
+# Disable AOF (if using RDB only)
+appendonly no
+```
+
+3.**Test configuration**:
+
+```bash
+sudo redis-server /etc/redis/redis.conf --test-config
+```
+
+4.**Restart Redis**:
+
+```bash
+sudo systemctl restart redis-server
+```
+
+5.**Verify persistence**:
+
+```bash
+redis-cli CONFIG GET save
+redis-cli LASTSAVE
+```
+
+**Note**: Comments must be on separate lines, not inline with `save` directives to avoid syntax errors.
+
+### Database Backup Configuration
+
+For production deployments, set up automated MariaDB backups to prevent data loss:
+
+**Backup script location**:
+
+```bash
+scripts/backup-database.sh
+```
+
+**Configure backup credentials** in the script:
+
+```bash
+DB_USER="your_db_user"
+DB_PASSWORD="your_db_password"
+DB_NAME="HomeAssistant"
+DB_HOST="127.0.0.1"
+```
+
+**Create backup directories**:
+
+```bash
+sudo mkdir -p /var/backups/homeassistant
+sudo chown $USER:$USER /var/backups/homeassistant
+```
+
+**Make script executable**:
+
+```bash
+chmod +x scripts/backup-database.sh
+```
+
+**Test backup manually**:
+
+```bash
+./scripts/backup-database.sh
+```
+
+**Set up automated daily backups with crontab**:
+
+```bash
+crontab -e
+```
+
+Add this line for daily backup at 2 AM:
+
+```bash
+0 2 * * * /path/to/HomeAssistantBackend/scripts/backup-database.sh
+```
+
+**Backup Features**:
+
+- **Compression**: Gzip compression for space efficiency
+- **Rotation**: Keeps 7 daily backups, 4 weekly backups
+- **Weekly backups**: Automatic weekly backup creation on Sundays
+- **Logging**: Comprehensive logging to `/var/log/homeassistant-backup.log`
+- **Error handling**: Proper error detection and reporting
+
+**Backup locations**:
+
+- Daily: `/var/backups/homeassistant/homeassistant_backup_YYYYMMDD_HHMMSS.sql.gz`
+- Weekly: `/var/backups/homeassistant/weekly/homeassistant_weekly_YYYYMMDD.sql.gz`
+
 ## Contributing
 
 1. Fork the repository
@@ -428,14 +504,6 @@ This repository includes:
 ## 🌐 API Endpoints
 
 See `API_Reference.md` for API endpoints information.
-
----
-
-## 🔐 Security
-
-- UUID + device_id for stateless anonymous sessions
-- Role distinction for user/admin actions
-- Foreign key integrity and activity tracking
 
 ---
 

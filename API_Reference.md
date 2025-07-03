@@ -136,11 +136,20 @@ Logs out the authenticated user.
 
 **App Authentication:** Required (see headers above)
 
+**Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `user_id` | String | user id return from login | Yes |
+
 **Example Request:**
 
 ```bash
 curl -X POST http://localhost:10000/api/auth/logout \
-  
+  -H "Content-Type: application/json" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -d '{"user_id": "1"}'
 ```
 
 **Example Response:**
