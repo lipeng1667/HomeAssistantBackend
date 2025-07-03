@@ -7,47 +7,43 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 ### For APP
 
-#### 🔑 Auth (Anonymous Only)
+#### 🔑 Auth
 
-| Method | Endpoint             | Description                            |
-| ------ | -------------------- | -------------------------------------- |
-| POST   | `/api/auth/anonymous`| Anonymous login using device_id        |
-| POST   | `/api/auth/logout`   | End session                            |
-| POST   | `/api/auth/register` | Register with username and password    |
+| Method | Endpoint             | Description                            |Done|
+| ------ | -------------------- | -------------------------------------- |----|
+| POST   | `/api/auth/anonymous`| Anonymous login using device_id        |✅|
+| POST   | `/api/auth/logout`   | End session                            |✅|
+| POST   | `/api/auth/register` | Register with username and password    |❌|
 
 #### 💬 Forum
 
-| Method | Endpoint                         | Description               |
-| ------ | -------------------------------- | ------------------------- |
-| GET    | `/api/forum/questions`           | List all questions        |
-| POST   | `/api/forum/questions`           | Create a new question     |
-| GET    | `/api/forum/questions/:id`       | Get details of a question |
-| POST   | `/api/forum/questions/:id/reply` | Post a reply              |
+| Method | Endpoint                         | Description               |Done|
+| ------ | -------------------------------- | ------------------------- |----|
+| GET    | `/api/forum/questions`           | List all questions        |❌|
+| POST   | `/api/forum/questions`           | Create a new question     |❌|
+| GET    | `/api/forum/questions/:id`       | Get details of a question |❌|
+| POST   | `/api/forum/questions/:id/reply` | Post a reply              |❌|
 
 #### 📩 Instant Messaging (IM)
 
-| Method | Endpoint             | Description                |
-| ------ | -------------------- | -------------------------- |
-| GET    | `/api/chat/messages` | Fetch chat history         |
-| POST   | `/api/chat/messages` | Send message to admin/user |
+| Method | Endpoint             | Description                |Done|
+| ------ | -------------------- | -------------------------- |----|
+| GET    | `/api/chat/messages` | Fetch chat history         |❌|
+| POST   | `/api/chat/messages` | Send message to admin/user |❌|
 
 #### 📊 Logs
 
-| Method | Endpoint             | Description                                |
-| ------ | -------------------- | ------------------------------------------ |
-| POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) |
+| Method | Endpoint             | Description                                |Done|
+| ------ | -------------------- | ------------------------------------------ |----|
+| POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) |❌|
 
 ### For WebManger
 
 #### 🛠️ Admin
 
-| Method | Endpoint                               | Description                       |
-| ------ | -------------------------------------- | --------------------------------- |
-| POST   | `/api/admin/login`                     | Admin login                       |
-| GET    | `/api/admin/forum/questions`           | View all user questions           |
-| POST   | `/api/admin/forum/questions/:id/reply` | Admin replies to a forum question |
-| GET    | `/api/admin/chat/:user_id/messages`    | View chat with a specific user    |
-| POST   | `/api/admin/chat/:user_id/messages`    | Admin sends message to a user     |
+| Method | Endpoint                               | Description                       |Done|
+| ------ | -------------------------------------- | --------------------------------- |---|
+| POST   | `/api/admin/login`                     | Admin login                       |❌|
 
 ---
 
@@ -71,6 +67,16 @@ const timestamp = Date.now().toString()
 const payload = `${timestamp}`
 const signature = crypto.createHmac('sha256', app_secret).update(payload).digest('hex')
 ```
+
+#### App-Level Authentication Errors
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `"Missing required headers"` | Missing X-Timestamp, X-Signature, or X-App-Type headers | Include all required headers in request |
+| `"Invalid timestamp"` | Timestamp is outside 5-minute window or malformed | Use current timestamp in milliseconds |
+| `"Invalid signature"` | HMAC-SHA256 signature doesn't match expected value | Verify payload and secret key for signature generation |
+| `"Timestamp too old"` | Request timestamp is more than 5 minutes old | Use fresh timestamp for each request |
+| `"Timestamp too far in future"` | Request timestamp is more than 5 minutes in future | Check system clock synchronization |
 
 **Security Notes:**
 
@@ -117,8 +123,16 @@ curl -X POST http://localhost:10000/api/auth/login \
 | `data.user` | Object | User information object |
 | `data.user.id` | Integer | User's unique database ID |
 
-**Example Response:**
+**Response Error Codes:**
 
+| Status | Error Message | Cause | Solution |
+|--------|---------------|-------|----------|
+| **400** | `"parameter not found"` | Missing device_id in request body | Include device_id parameter |
+| **500** | `"Internal server error"` | Database or Redis error | Check server logs, retry request |
+
+**Example Responses:**
+
+**Success (200)**:
 ```json
 {
   "status": "success",
@@ -127,6 +141,14 @@ curl -X POST http://localhost:10000/api/auth/login \
       "id": 1
     }
   }
+}
+```
+
+**Error (400)**:
+```json
+{
+  "status": "error",
+  "message": "parameter not found"
 }
 ```
 
@@ -153,8 +175,18 @@ curl -X POST http://localhost:10000/api/auth/logout \
   -d '{"user_id": "1", "device_id" : "iPhone_12_ABC123"}'
 ```
 
-**Example Response:**
+**Response Error Codes:**
 
+| Status | Error Message | Cause | Solution |
+|--------|---------------|-------|----------|
+| **400** | `"parameter is required"` | Missing device_id in request body | Include device_id parameter |
+| **400** | `"Session validation failed or session not found"` | Device ID mismatch or session doesn't exist | Verify device_id matches login device |
+| **401** | `"Session not found or expired"` | Invalid user_id or expired session | Login again with valid credentials |
+| **500** | `"Internal server error"` | Database or Redis error | Check server logs, retry request |
+
+**Example Responses:**
+
+**Success (200)**:
 ```json
 {
   "status": "success",
@@ -162,562 +194,68 @@ curl -X POST http://localhost:10000/api/auth/logout \
 }
 ```
 
----
-
-## Forum API
-
-Manages forum questions and replies.
-
-### `GET /api/forum/questions`
-
-Retrieves a list of all forum questions.
-
-**Authentication:** Required
-
-**Example Request:
-
-```bash
-curl -X GET http://localhost:10000/api/forum/questions \
-  
-```
-
-**Example Response:**
-
+**Error (400)**:
 ```json
 {
-  "status": "success",
-  "data": [
-    {
-      "id": 1,
-      "user_id": 1,
-      "title": "How to connect to my smart device?",
-      "content": "I'm having trouble connecting my new smart device to the app. Any tips?",
-      "created_at": "2025-06-30T10:00:00.000Z",
-      "user_uuid": "a_unique_user_id",
-      "reply_count": 2
-    }
-  ]
+  "status": "error",
+  "message": "parameter is required"
 }
 ```
 
-### `POST /api/forum/questions`
-
-Creates a new forum question.
-
-**Authentication:** Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `title` | String | The title of the question. | Yes |
-| `content` | String | The content of the question. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/forum/questions \
-  -H "Content-Type: application/json" \
-  -d '{"title": "How to setup WiFi?", "content": "I need help setting up my device WiFi connection."}'
-```
-
-**Example Response:**
-
+**Error (401)**:
 ```json
 {
-  "status": "success",
-  "data": {
-    "id": 2,
-    "title": "New Question Title",
-    "content": "This is the content of the new question.",
-    "user_id": 1
-  }
-}
-```
-
-### `GET /api/forum/questions/:id`
-
-Retrieves the details of a specific question, including replies.
-
-**Authentication:** Required
-
-**Parameters:
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `id` | Integer | The ID of the question. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/api/forum/questions/1 \
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "question": {
-      "id": 1,
-      "user_id": 1,
-      "title": "How to connect to my smart device?",
-      "content": "I'm having trouble connecting my new smart device to the app. Any tips?",
-      "created_at": "2025-06-30T10:00:00.000Z",
-      "user_uuid": "a_unique_user_id"
-    },
-    "replies": [
-      {
-        "id": 1,
-        "question_id": 1,
-        "user_id": 2,
-        "responder_role": "user",
-        "content": "I had the same issue! Make sure your Wi-Fi is on the 2.4GHz band.",
-        "created_at": "2025-06-30T11:00:00.000Z",
-        "responder_identifier": "another_user_id"
-      }
-    ]
-  }
-}
-```
-
-### `POST /api/forum/questions/:id/reply`
-
-Posts a reply to a specific question.
-
-**Authentication:** Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `id` | Integer | The ID of the question. | Yes |
-| `content` | String | The content of the reply. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/forum/questions/1/reply \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Try checking your router settings first."}'
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": 2,
-    "question_id": 1,
-    "content": "This is a new reply.",
-    "responder_role": "user"
-  }
+  "status": "error",
+  "message": "Session not found or expired"
 }
 ```
 
 ---
 
-## Chat API
+## Error Reference
 
-Handles real-time chat between users and admins.
-
-### `GET /api/chat/messages`
-
-Retrieves the chat history for the authenticated user.
-
-**Authentication:** Required
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/api/chat/messages \
-```
-
-**Example Response:**
+All API endpoints return standardized error responses with the following format:
 
 ```json
 {
-  "status": "success",
-  "data": {
-    "conversation_id": 1,
-    "messages": [
-      {
-        "id": 1,
-        "conversation_id": 1,
-        "user_id": 1,
-        "sender_role": "user",
-        "message": "Hello, I need help with my device.",
-        "timestamp": "2025-06-30T12:00:00.000Z",
-        "sender_identifier": "a_unique_user_id"
-      }
-    ]
-  }
+  "status": "error",
+  "message": "Description of the error"
 }
 ```
 
-### `POST /api/chat/messages`
-
-Sends a message in the chat.
-
-**Authentication:** Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `message` | String | The content of the message. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/chat/messages \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello, I need assistance with my device setup."}'
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": 2,
-    "conversation_id": 1,
-    "message": "This is a new message.",
-    "sender_role": "user",
-    "timestamp": "2025-06-30T12:05:00.000Z"
-  }
-}
-```
-
----
-
-## Logs API
-
-Handles user activity logging.
-
-### `POST /api/logs/activity`
-
-Logs a user activity.
-
-**Authentication:** Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `action_type` | Integer | The type of action (e.g., 0 for login, 1 for view forum). | Yes |
-| `action` | String | A description of the action. | Yes |
-| `metadata` | Object | Optional metadata for the action. | No |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/logs/activity \
-  -H "Content-Type: application/json" \
-  -d '{"action_type": 1, "action": "view_forum", "metadata": {"page_number": 1}}'
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": 1,
-    "user_id": 1,
-    "action_type": 1,
-    "action": "view_forum",
-    "metadata": null,
-    "created_at": "2025-06-30T13:00:00.000Z"
-  }
-}
-```
-
----
-
-## Admin API
-
-**Note:** These endpoints are for administrative use only and require admin authentication.
-
-### `POST /api/admin/login`
-
-**App Authentication:** Required (see headers above)
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `username` | String | The admin's username. | Yes |
-| `password` | String | The admin's password. | Yes |
-
-**Headers:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `X-App-Type` | String | Must be `"ios"` | Yes |
-| `X-Timestamp` | String | Unix timestamp in milliseconds | Yes |
-| `X-Signature` | String | HMAC-SHA256 signature | Yes |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/admin/login \
-  -H "Content-Type: application/json" \
-  -H "X-App-Type: ios" \
-  -H "X-Timestamp: 1672531200000" \
-  -H "X-Signature: a1b2c3d4e5f6..." \
-  -d '{"username": "admin", "password": "secure_password"}'
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "admin": {
-      "id": 1,
-      "username": "admin",
-      "role": "admin"
-    }
-  }
-}
-```
-
-### `GET /api/admin/forum/questions`
-
-Retrieves all forum questions for admin view.
-
-**Authentication:** Admin Required
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/api/admin/forum/questions \
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": [
-    {
-      "id": 1,
-      "user_id": 1,
-      "title": "How to connect to my smart device?",
-      "content": "I'm having trouble connecting my new smart device to the app. Any tips?",
-      "created_at": "2025-06-30T10:00:00.000Z",
-      "user_uuid": "a_unique_user_id",
-      "reply_count": 2
-    }
-  ]
-}
-```
-
-### `POST /api/admin/forum/questions/:id/reply`
-
-Allows an admin to reply to a forum question.
-
-**Authentication:** Admin Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `id` | Integer | The ID of the question. | Yes |
-| `content` | String | The content of the reply. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/admin/forum/questions/1/reply \
-  -H "Content-Type: application/json" \
-  -d '{"content": "This is a comprehensive solution to your problem..."}'
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": 3,
-    "question_id": 1,
-    "content": "This is a comprehensive solution to your problem...",
-    "responder_role": "admin"
-  }
-}
-```
-
-### `GET /api/admin/chat/:user_id/messages`
-
-Retrieves the chat history between an admin and a user.
-
-**Authentication:** Admin Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `user_id` | Integer | The ID of the user. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/api/admin/chat/1/messages \
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "conversation_id": 1,
-    "messages": [
-      {
-        "id": 1,
-        "conversation_id": 1,
-        "user_id": 1,
-        "sender_role": "user",
-        "message": "Hello, I need help with my device.",
-        "timestamp": "2025-06-30T12:00:00.000Z",
-        "sender_identifier": "a_unique_user_id"
-      }
-    ]
-  }
-}
-```
-
-### `POST /api/admin/chat/:user_id/messages`
-
-Allows an admin to send a message to a user.
-
-**Authentication:** Admin Required
-
-**Parameters:**
-
-| Name | Type | Description | Required |
-|---|---|---|---|
-| `user_id` | Integer | The ID of the user. | Yes |
-| `message` | String | The content of the message. | Yes |
-
-**Example Request:**
-
-```bash
-curl -X POST http://localhost:10000/api/admin/chat/1/messages \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello! How can I assist you today?"}'
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": 2,
-    "conversation_id": 1,
-    "message": "Hello! How can I assist you today?",
-    "sender_role": "admin",
-    "timestamp": "2025-06-30T12:05:00.000Z"
-  }
-}
-```
-
-## Health API(INNER USER)
-
-Provides health check endpoints for the application.
-
-### `GET /health`
-
-Returns the basic health status of the application.
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/health
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-06-30T14:00:00.000Z",
-  "uptime": 12345.67,
-  "memory": {
-    "rss": 51200000,
-    "heapTotal": 32000000,
-    "heapUsed": 16000000,
-    "external": 1000000
-  },
-  "version": "1.0.0"
-}
-```
-
-### `GET /health/db`
-
-Checks the health of the database connection.
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/health/db
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "responseTime": "15ms",
-  "timestamp": "2025-06-30T14:05:00.000Z"
-}
-```
-
-### `GET /health/detailed`
-
-Returns a detailed health report of the system.
-
-**Example Request:**
-
-```bash
-curl -X GET http://localhost:10000/health/detailed
-```
-
-**Example Response:**
-
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-06-30T14:10:00.000Z",
-  "system": {
-    "uptime": 12345.67,
-    "memory": {
-      "rss": 51200000,
-      "heapTotal": 32000000,
-      "heapUsed": 16000000,
-      "external": 1000000
-    },
-    "cpu": {
-      "user": 100000,
-      "system": 50000
-    },
-    "version": "v18.12.1",
-    "platform": "darwin",
-    "arch": "x64"
-  },
-  "database": {
-    "status": "connected",
-    "responseTime": "12ms"
-  }
-}
-```
+### HTTP Status Codes
+
+| Status Code | Description | When It Occurs |
+|-------------|-------------|----------------|
+| **200** | Success | Request completed successfully |
+| **400** | Bad Request | Missing required parameters, invalid input format |
+| **401** | Unauthorized | Invalid authentication, expired session, missing headers |
+| **403** | Forbidden | Access denied (e.g., localhost-only endpoints) |
+| **404** | Not Found | Endpoint doesn't exist |
+| **429** | Too Many Requests | Rate limit exceeded |
+| **500** | Internal Server Error | Server-side error, database connection issues |
+
+### Rate Limiting Errors
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `"Too many requests, please try again later"` | Exceeded rate limit (100 requests per 15 minutes) | Wait before making more requests |
+| `"Too many login attempts, please try again later"` | Exceeded auth rate limit (5 attempts per 15 minutes) | Wait before attempting authentication |
+
+### System Errors
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `"Endpoint not found"` | Invalid URL or HTTP method | Check API documentation for correct endpoint |
+| `"Access denied. This endpoint is only accessible from localhost."` | Accessing localhost-only endpoint from external IP | Use localhost or 127.0.0.1 for health endpoints |
+
+### Best Practices for Error Handling
+
+1. **Always check status field**: Use `status === "error"` to detect failures
+2. **Log error messages**: Store error messages for debugging
+3. **Implement retry logic**: For 5xx errors, retry with exponential backoff
+4. **Handle rate limits**: Implement proper delays when receiving 429 responses
+5. **Validate inputs**: Check required parameters before making requests
+6. **Monitor timestamps**: Ensure system clocks are synchronized for auth
 
 ---
