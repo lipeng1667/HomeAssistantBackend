@@ -11,39 +11,40 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 | Method | Endpoint             | Description                            |Done|
 | ------ | -------------------- | -------------------------------------- |----|
-| POST   | `/api/auth/anonymous`| Anonymous login using device_id        |✅|
-| POST   | `/api/auth/logout`   | End session                            |✅|
-| POST   | `/api/auth/register` | Register with username and password    |❌|
+| POST   | `/api/auth/anonymous`| Anonymous login using device_id        | ✅ |
+| POST   | `/api/auth/logout`   | End session                            | ✅ |
+| POST   | `/api/auth/register` | Register with username and password    | ❌ |
+| POST   | `/api/auth/login`    | Register with username and password    | ❌ |
 
 #### 💬 Forum
 
 | Method | Endpoint                         | Description               |Done|
 | ------ | -------------------------------- | ------------------------- |----|
-| GET    | `/api/forum/questions`           | List all questions        |❌|
-| POST   | `/api/forum/questions`           | Create a new question     |❌|
-| GET    | `/api/forum/questions/:id`       | Get details of a question |❌|
-| POST   | `/api/forum/questions/:id/reply` | Post a reply              |❌|
+| GET    | `/api/forum/questions`           | List all questions        | ❌ |
+| POST   | `/api/forum/questions`           | Create a new question     | ❌ |
+| GET    | `/api/forum/questions/:id`       | Get details of a question | ❌ |
+| POST   | `/api/forum/questions/:id/reply` | Post a reply              | ❌ |
 
 #### 📩 Instant Messaging (IM)
 
 | Method | Endpoint             | Description                |Done|
 | ------ | -------------------- | -------------------------- |----|
-| GET    | `/api/chat/messages` | Fetch chat history         |❌|
-| POST   | `/api/chat/messages` | Send message to admin/user |❌|
+| GET    | `/api/chat/messages` | Fetch chat history         | ❌ |
+| POST   | `/api/chat/messages` | Send message to admin/user | ❌ |
 
 #### 📊 Logs
 
 | Method | Endpoint             | Description                                |Done|
 | ------ | -------------------- | ------------------------------------------ |----|
-| POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) |❌|
+| POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) | ❌ |
 
 ### For WebManger
 
 #### 🛠️ Admin
 
 | Method | Endpoint                               | Description                       |Done|
-| ------ | -------------------------------------- | --------------------------------- |---|
-| POST   | `/api/admin/login`                     | Admin login                       |❌|
+| ------ | -------------------------------------- | --------------------------------- |----|
+| POST   | `/api/admin/login`                     | Admin login                       | ❌ |
 
 ---
 
@@ -107,7 +108,7 @@ mark this new user, and store the information into the table 'user' in database.
 **Example Request:**
 
 ```bash
-curl -X POST http://localhost:10000/api/auth/login \
+curl -X POST http://localhost:10000/api/auth/anonymous \
   -H "Content-Type: application/json" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..." \
@@ -133,6 +134,7 @@ curl -X POST http://localhost:10000/api/auth/login \
 **Example Responses:**
 
 **Success (200)**:
+
 ```json
 {
   "status": "success",
@@ -145,10 +147,146 @@ curl -X POST http://localhost:10000/api/auth/login \
 ```
 
 **Error (400)**:
+
 ```json
 {
   "status": "error",
   "message": "parameter not found"
+}
+```
+
+### `POST /api/auth/register`
+
+Since user can login anonymously, the APP client should provids two registions options: on the login screen or via settings
+menu. If a user register from a setting's menu, it means they've already had an anonymous session and therefor already have a
+user ID, this user ID MUST also be sent with the register request. The server will use this user ID to valide that the provided
+device id matches the ones stored in Database.
+
+**App Authentication:** Required (see headers above)
+
+**Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `device_id` | String | A unique identifier for the user's device. | Yes |
+| `account_name` | String | user name | Yes |
+| `phone_number` | String | phone number | Yes |
+| `password` | String | sha-256(original password) | Yes |
+| `user_id` | String | A id generate by the server and sent to client after anonymously login | NO |
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:10000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -d '{"device_id": "iPhone_12_ABC123", "account_name": "michale", "phone_number":"18611112222", "password":"64-bit sha256 password"}'
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.user` | Object | User information object |
+| `data.user.id` | Integer | User's unique database ID |
+
+**Response Error Codes:**
+
+| Status | Error Message | Cause | Solution |
+|--------|---------------|-------|----------|
+| **400** | `"parameter invalid"` | parameters missed incorrect format(8-bit password, letters & numbers) | Include required parameter |
+| **500** | `"Internal server error"` | Database or Redis error | Check server logs, retry request |
+
+**Example Responses:**
+
+**Success (200)**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {
+      "id": 1
+    }
+  }
+}
+```
+
+**Error (400)**:
+
+```json
+{
+  "status": "error",
+  "message": "parameter invalid"
+}
+```
+
+### `POST /api/auth/login`
+
+login with phonenumber and password. database will store the sha-256(original passowrd), so server can compaire the password
+using the same encryption method.
+
+**App Authentication:** Required (see headers above)
+
+**Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `user_id` | String | A unique identifier for the user. | Yes |
+| `phone_number` | String | phone number | Yes |
+| `password` | String | sha-256(sha-256(original password)+timestamp) | Yes |
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:10000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -d '{"user_id":"23", "phone_number":"18611112222", "password":"64-bit sha256 password"}'
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.user` | Object | User information object |
+| `data.user.id` | Integer | User's unique database ID |
+
+**Response Error Codes:**
+
+| Status | Error Message | Cause | Solution |
+|--------|---------------|-------|----------|
+| **400** | `"parameter invalid"` | parameters missed | Include required parameter |
+| **403** | `Forbidden` | wrong password | input the correct passowrd |
+| **500** | `"Internal server error"` | Database or Redis error | Check server logs, retry request |
+
+**Example Responses:**
+
+**Success (200)**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {
+      "id": 1
+    }
+  }
+}
+```
+
+**Error (400)**:
+
+```json
+{
+  "status": "error",
+  "message": "parameter invalid"
 }
 ```
 
@@ -187,6 +325,7 @@ curl -X POST http://localhost:10000/api/auth/logout \
 **Example Responses:**
 
 **Success (200)**:
+
 ```json
 {
   "status": "success",
@@ -195,6 +334,7 @@ curl -X POST http://localhost:10000/api/auth/logout \
 ```
 
 **Error (400)**:
+
 ```json
 {
   "status": "error",
@@ -203,6 +343,7 @@ curl -X POST http://localhost:10000/api/auth/logout \
 ```
 
 **Error (401)**:
+
 ```json
 {
   "status": "error",

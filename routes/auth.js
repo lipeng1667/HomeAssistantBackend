@@ -17,6 +17,8 @@
  * 
  * Functions:
  * - POST /api/auth/anonymous: Anonymous login endpoint handler
+ * - POST /api/auth/register: User registration endpoint handler
+ * - POST /api/auth/login: User login endpoint handler
  * - POST /api/auth/logout: User logout endpoint handler
  * 
  * Dependencies:
@@ -75,6 +77,162 @@ router.post('/anonymous', async (req, res) => {
     });
   } catch (error) {
     console.error('Anonymous login error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * @description User registration endpoint
+ * @async
+ * @function register
+ * @route POST /api/auth/register
+ * 
+ * @param {Object} req.body
+ * @param {string} req.body.device_id - Device identifier
+ * @param {string} req.body.account_name - Username
+ * @param {string} req.body.phone_number - Phone number
+ * @param {string} req.body.password - SHA-256 hash of password
+ * @param {string} req.body.user_id - Optional existing user ID for upgrade
+ * 
+ * @returns {Object} Response object
+ * @returns {string} Response.status - Success/error status
+ * @returns {Object} Response.data - User data
+ * 
+ * @throws {400} If required parameters are missing or invalid
+ * @throws {500} If server error occurs
+ */
+router.post('/register', async (req, res) => {
+  try {
+    const { device_id, account_name, phone_number, password, user_id } = req.body;
+
+    // Validate required parameters
+    if (!device_id || !account_name || !phone_number || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter invalid'
+      });
+    }
+
+    // Validate password hash format (64 hex characters)
+    if (!/^[a-f0-9]{64}$/i.test(password)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter invalid'
+      });
+    }
+
+    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+    const result = await authService.registerUser(
+      device_id,
+      account_name,
+      phone_number,
+      password,
+      user_id ? parseInt(user_id) : null
+    );
+
+    res.json({
+      status: 'success',
+      data: {
+        user: {
+          id: result.userId
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    
+    if (error.message === 'Phone number already registered') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter invalid'
+      });
+    }
+
+    if (error.message === 'User validation failed - device ID mismatch') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter invalid'
+      });
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * @description User login endpoint
+ * @async
+ * @function login
+ * @route POST /api/auth/login
+ * 
+ * @param {Object} req.body
+ * @param {string} req.body.user_id - User ID
+ * @param {string} req.body.phone_number - Phone number
+ * @param {string} req.body.password - SHA-256(storedHash + timestamp)
+ * @param {Object} req.headers
+ * @param {string} req.headers.x-timestamp - Timestamp used in password hash
+ * 
+ * @returns {Object} Response object
+ * @returns {string} Response.status - Success/error status
+ * @returns {Object} Response.data - User data
+ * 
+ * @throws {400} If required parameters are missing
+ * @throws {403} If authentication fails
+ * @throws {500} If server error occurs
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const { user_id, phone_number, password } = req.body;
+    const timestamp = req.headers['x-timestamp'];
+
+    // Validate required parameters
+    if (!user_id || !phone_number || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter invalid'
+      });
+    }
+
+    // Validate password hash format
+    if (!/^[a-f0-9]{64}$/i.test(password)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'parameter invalid'
+      });
+    }
+
+    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+    const result = await authService.userLogin(
+      phone_number,
+      password,
+      parseInt(timestamp),
+      clientIP
+    );
+
+    res.json({
+      status: 'success',
+      data: {
+        user: {
+          id: result.userId
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    
+    if (error.message === 'User not found' || error.message === 'Invalid password') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Forbidden'
+      });
+    }
+
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

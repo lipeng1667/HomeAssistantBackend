@@ -3,7 +3,7 @@
  * @description Authentication service layer for anonymous user management and session handling
  * @author Michael Lee
  * @created 2025-07-02
- * @modified 2025-07-03
+ * @modified 2025-07-05
  * 
  * This service provides authentication business logic including anonymous user creation,
  * secure session management, and activity logging separated from HTTP concerns.
@@ -13,6 +13,8 @@
  * - 2025-07-03: Enhanced session security with status and device_id validation
  * - 2025-07-03: Renamed createUserSession to createAnonymousUserSession
  * - 2025-07-03: Added comprehensive validation to deleteUserSession
+ * - 2025-07-05: Added password hashing utilities and user registration/login
+ * - 2025-07-05: Added updateSessionStatus for Redis status management
  * 
  * Functions:
  * - findUserByDeviceId(deviceId): Find user by device identifier
@@ -22,6 +24,13 @@
  * - deleteUserSession(userId, deviceId): Delete Redis session with validation
  * - anonymousLogin(deviceId, clientIP): Handle anonymous login flow
  * - userLogout(userId, deviceId): Handle user logout flow with validation
+ * - hashPassword(plainPassword): Hash plain password with SHA-256
+ * - verifyPassword(storedHash, timestamp, receivedPassword): Verify timestamped password
+ * - isValidSHA256(hash): Validate SHA-256 hash format
+ * - registerUser(deviceId, accountName, phoneNumber, hashedPassword, existingUserId): Register new user
+ * - userLogin(phoneNumber, password, timestamp, clientIP): User login with timestamped password
+ * - updateSessionStatus(userId, status): Update Redis session status
+ * - createUserSession(userId, deviceId, clientIP): Create Redis session for registered users
  * 
  * Security Features:
  * - Anonymous user status tracking in Redis sessions
@@ -36,6 +45,7 @@
 
 const pool = require('../config/database');
 const redisClient = require('../config/redis.js');
+const crypto = require('crypto');
 
 class AuthService {
   /**
@@ -267,6 +277,269 @@ class AuthService {
       sessionDeleted,
       activityLogged: true
     };
+  }
+
+  /**
+   * Hash plain password using SHA-256
+   * @function hashPassword
+   * @param {string} plainPassword - Plain text password to hash
+   * @returns {string} SHA-256 hash (64 hex characters)
+   * @throws {Error} If password is empty or invalid
+   * @sideEffects None - pure function
+   */
+  hashPassword(plainPassword) {
+    if (!plainPassword || typeof plainPassword !== 'string') {
+      throw new Error('Password must be a non-empty string');
+    }
+
+    return crypto.createHash('sha256').update(plainPassword).digest('hex');
+  }
+
+  /**
+   * Verify timestamped password for login authentication
+   * @function verifyPassword
+   * @param {string} storedHash - SHA-256 hash stored in database
+   * @param {number} timestamp - Timestamp used in client-side hashing
+   * @param {string} receivedPassword - SHA-256(storedHash + timestamp) from client
+   * @returns {boolean} True if password verification succeeds
+   * @throws {Error} If parameters are invalid
+   * @sideEffects None - pure function
+   */
+  verifyPassword(storedHash, timestamp, receivedPassword) {
+    if (!storedHash || !timestamp || !receivedPassword) {
+      throw new Error('All parameters are required for password verification');
+    }
+
+    if (!this.isValidSHA256(storedHash) || !this.isValidSHA256(receivedPassword)) {
+      throw new Error('Invalid SHA-256 hash format');
+    }
+
+    // Compute expected hash: SHA-256(storedHash + timestamp)
+    const payload = `${storedHash}${timestamp}`;
+    const expectedHash = crypto.createHash('sha256').update(payload).digest('hex');
+
+    // Use timing-safe comparison to prevent timing attacks
+    return crypto.timingSafeEqual(
+      Buffer.from(receivedPassword, 'hex'),
+      Buffer.from(expectedHash, 'hex')
+    );
+  }
+
+  /**
+   * Validate SHA-256 hash format
+   * @function isValidSHA256
+   * @param {string} hash - Hash string to validate
+   * @returns {boolean} True if hash is valid SHA-256 format
+   * @throws Does not throw - returns false for invalid input
+   * @sideEffects None - pure function
+   */
+  isValidSHA256(hash) {
+    if (!hash || typeof hash !== 'string') {
+      return false;
+    }
+
+    // SHA-256 produces 64 hex characters
+    const sha256Regex = /^[a-f0-9]{64}$/i;
+    return sha256Regex.test(hash);
+  }
+
+  /**
+   * Register new user with username, phone, and hashed password
+   * @async
+   * @function registerUser
+   * @param {string} deviceId - Device identifier
+   * @param {string} accountName - Username for account
+   * @param {string} phoneNumber - Phone number
+   * @param {string} hashedPassword - SHA-256 hash of password
+   * @param {number} existingUserId - Optional existing user ID for upgrade
+   * @returns {Promise<Object>} Registration result
+   * @throws {Error} Database or validation errors
+   * @sideEffects Creates/updates user record, logs activity
+   */
+  async registerUser(deviceId, accountName, phoneNumber, hashedPassword, existingUserId = null) {
+    // Validate hashed password format
+    if (!this.isValidSHA256(hashedPassword)) {
+      throw new Error('Invalid password hash format');
+    }
+
+    // Check if phone number already exists
+    const [existingPhone] = await pool.execute(
+      'SELECT id FROM users WHERE phone_number = ? AND status = 0',
+      [phoneNumber]
+    );
+
+    if (existingPhone.length > 0) {
+      throw new Error('Phone number already registered');
+    }
+
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      let userId;
+
+      if (existingUserId) {
+        // Upgrade existing anonymous user
+        const [result] = await connection.execute(
+          'UPDATE users SET username = ?, phone_number = ?, password = ?, updated_at = NOW() WHERE id = ? AND device_id = ? AND status = 0',
+          [accountName, phoneNumber, hashedPassword, existingUserId, deviceId]
+        );
+
+        if (result.affectedRows === 0) {
+          throw new Error('User validation failed - device ID mismatch');
+        }
+
+        userId = existingUserId;
+      } else {
+        // Create new user
+        const [result] = await connection.execute(
+          'INSERT INTO users (device_id, username, phone_number, password) VALUES (?, ?, ?, ?)',
+          [deviceId, accountName, phoneNumber, hashedPassword]
+        );
+        userId = result.insertId;
+      }
+
+      // Log registration activity
+      await connection.execute(
+        'INSERT INTO user_logs (user_id, action_type, action) VALUES (?, 0, "user_registration")',
+        [userId]
+      );
+
+      await connection.commit();
+
+      // Update session status if upgrading from anonymous
+      if (existingUserId) {
+        await this.updateSessionStatus(userId, 'login');
+      }
+
+      return {
+        userId,
+        isUpgrade: !!existingUserId
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  /**
+   * User login with phone number and timestamped password
+   * @async
+   * @function userLogin
+   * @param {string} phoneNumber - Phone number for login
+   * @param {string} password - SHA-256(storedHash + timestamp) from client
+   * @param {number} timestamp - Timestamp from request headers
+   * @param {string} clientIP - Client IP address
+   * @returns {Promise<Object>} Login result
+   * @throws {Error} Authentication or database errors
+   * @sideEffects Logs activity, creates Redis session
+   */
+  async userLogin(phoneNumber, password, timestamp, clientIP) {
+    // Find user by phone number
+    const [users] = await pool.execute(
+      'SELECT id, device_id, password FROM users WHERE phone_number = ? AND status = 0',
+      [phoneNumber]
+    );
+
+    if (users.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const user = users[0];
+
+    // Verify password using stored hash and timestamp
+    const isValidPassword = this.verifyPassword(user.password, timestamp, password);
+
+    if (!isValidPassword) {
+      throw new Error('Invalid password');
+    }
+
+    // Create Redis session
+    const sessionCreated = await this.createUserSession(user.id, user.device_id, clientIP);
+
+    // Log login activity
+    await this.logUserActivity(user.id, 0, 'user_login');
+
+    return {
+      userId: user.id,
+      sessionCreated
+    };
+  }
+
+  /**
+   * Update Redis session status for user
+   * @async
+   * @function updateSessionStatus
+   * @param {number} userId - User ID to update
+   * @param {string} status - New status ('anonymous', 'login', 'blocked')
+   * @returns {Promise<boolean>} True if status updated successfully
+   * @throws Does not throw - logs errors and returns false
+   * @sideEffects Updates status field in Redis session
+   */
+  async updateSessionStatus(userId, status) {
+    if (!redisClient.isReady()) {
+      console.warn('Redis not available for session status update');
+      return false;
+    }
+
+    try {
+      const client = redisClient.getClient();
+      const userKey = redisClient.key(`user:${userId}`);
+
+      // Update status and last_seen
+      await client.hSet(userKey, {
+        status: status,
+        last_seen: Date.now().toString()
+      });
+
+      return true;
+    } catch (redisError) {
+      console.error('Redis session status update failed:', redisError);
+      return false;
+    }
+  }
+
+  /**
+   * Create Redis session for registered user
+   * @async
+   * @function createUserSession
+   * @param {number} userId - User ID for session
+   * @param {string} deviceId - Device identifier
+   * @param {string} clientIP - Client IP address
+   * @returns {Promise<boolean>} True if session created successfully
+   * @throws Does not throw - logs errors and returns false
+   * @sideEffects Creates Redis hash with 7-day TTL
+   */
+  async createUserSession(userId, deviceId, clientIP) {
+    if (!redisClient.isReady()) {
+      console.warn('Redis not available for session creation');
+      return false;
+    }
+
+    try {
+      const client = redisClient.getClient();
+      const userKey = redisClient.key(`user:${userId}`);
+      const now = Date.now().toString();
+
+      // Create session data
+      await client.hSet(userKey, {
+        device_id: deviceId,
+        login_time: now,
+        last_seen: now,
+        status: 'login',
+        ip_address: clientIP || 'unknown'
+      });
+
+      // Set TTL to 7 days
+      await client.expire(userKey, 604800);
+      return true;
+    } catch (redisError) {
+      console.error('Redis session creation failed:', redisError);
+      return false;
+    }
   }
 }
 

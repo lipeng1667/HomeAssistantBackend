@@ -131,13 +131,13 @@ ha:user:{user_id}                    → HASH (TTL: 604800s = 7d)
 #   device_id: Device identifier from login
 #   login_time: Unix timestamp when session was created
 #   last_seen: Unix timestamp of last API request
-#   active: User status ("true" for active, "false" for disabled)
+#   status: User status ('anonymous'/'login'/'blocked')
 #   ip_address: Client IP address (optional)
 # Examples:
 #   HSET ha:user:123 device_id "iPhone_12_ABC123"
 #   HSET ha:user:123 login_time "1672531200000"
 #   HSET ha:user:123 last_seen "1672531800000"
-#   HSET ha:user:123 active "true"
+#   HSET ha:user:123 status "login"
 #   HSET ha:user:123 ip_address "192.168.1.100"
 # 
 # Session Management:
@@ -146,8 +146,9 @@ ha:user:{user_id}                    → HASH (TTL: 604800s = 7d)
 #   - Can be manually deleted for instant logout
 #
 # Status Control:
-#   - active="true": User can access APIs
-#   - active="false": User is blocked (even with valid session)
+#   - status="login": Full access
+#   - status="anonymous": User can access APIs, but only VIEW, can not create topics or chat with admin
+#   - status="blocked": User is blocked (even with valid session)
 #   - Instant user control without waiting for session expiry
 ```
 
