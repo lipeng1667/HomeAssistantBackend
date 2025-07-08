@@ -1,5 +1,7 @@
 # ToDo list
 
+2025.06.30
+
 - [x]Security authrozation for each API request
 - [x]redis schema review
 - [x]logs/access.log logic review
@@ -8,3 +10,9 @@
 - [x]modify file name in middleware/auth.js to userAuth.js
 - [x]redis persistence
 - [x]mariadb cold backup
+
+2025.07.09
+
+- []forum endpoints for posts, that's the main feature
+- []forum upload file system, web socket system
+- []image file system design
