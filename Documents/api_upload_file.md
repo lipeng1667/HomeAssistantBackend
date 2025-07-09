@@ -1,7 +1,7 @@
 
 # UPLOAD FILES FOR FORUM
 
-## POST /api/forum/upload
+## POST /api/forum/uploads
 
 Uploads files for forum posts and replies with chunked upload support and real-time progress tracking.
 
@@ -24,16 +24,17 @@ Uploads files for forum posts and replies with chunked upload support and real-t
 
 **Request Body Example:**
 
-```json
-{
-  "file": "<binary_data>",
-  "user_id": 123,
-  "type": "topic",
-  "chunk_index": 0,
-  "total_chunks": 5,
-  "upload_id": "upload_123456789",
-  "post_id": 42
-}
+```bash
+curl -X POST http://localhost:10000/api/forum/uploads \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -F "file=@/path/to/image.jpg" \
+  -F "user_id=123" \
+  -F "type=topic" \
+  -F "chunk_index=0" \
+  -F "total_chunks=5" \
+  -F "upload_id=upload_123456789" \
+  -F "post_id=42"
 ```
 
 **Response Structure:**
@@ -217,6 +218,60 @@ Uploads files for forum posts and replies with chunked upload support and real-t
   "expires_at": "2025-07-08T11:00:00Z"
 }
 ```
+
+---
+
+## Direct File Upload (Instant Upload)
+
+For users who want to upload files directly without progress tracking, the API supports instant upload without chunking parameters. This is useful for smaller files or when WebSocket progress tracking is not needed.
+
+**Direct Upload Request:**
+
+Simply omit the chunking parameters (`chunk_index`, `total_chunks`, `upload_id`) and the file will be uploaded instantly.
+
+**Example Direct Upload:**
+
+```bash
+curl -X POST http://localhost:10000/api/forum/uploads \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -F "file=@/path/to/image.jpg" \
+  -F "user_id=123" \
+  -F "type=topic" \
+  -F "post_id=42"
+```
+
+**Direct Upload Response:**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "upload_id": "upload_123456789",
+    "chunk_index": 0,
+    "total_chunks": 1,
+    "uploaded_chunks": 1,
+    "progress_percentage": 100,
+    "file_url": "https://api.example.com/uploads/forum/image_123.jpg",
+    "file_id": 789,
+    "complete": true
+  }
+}
+```
+
+**When to Use Direct Upload:**
+
+- **Small files** (< 1MB) that don't require progress tracking
+- **Simple integrations** where WebSocket complexity is unnecessary
+- **Batch uploads** where individual file progress is not critical
+- **Mobile applications** with limited WebSocket support
+
+**Benefits:**
+
+- **Simpler implementation** - No WebSocket connection required
+- **Faster for small files** - No chunking overhead
+- **Immediate response** - Get file URL and ID instantly
+- **Lower server resources** - No session management or Redis usage
 
 ---
 
