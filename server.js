@@ -97,6 +97,16 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
+// Ensure upload directories exist
+const uploadDir = path.join(__dirname, 'uploads', 'forum');
+const tempDir = path.join(__dirname, 'temp');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
 // Create access log stream
 const accessLogStream = fs.createWriteStream(
   path.join(logsDir, 'access.log'),
@@ -176,6 +186,13 @@ app.use(helmet({
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+// Serve uploaded files statically
+app.use('/uploads/forum', express.static(path.join(__dirname, 'uploads', 'forum'), {
+  maxAge: '1d', // Cache for 1 day
+  etag: true,
+  lastModified: true
+}))
 // Custom Morgan format with local timezone and enhanced logging
 morgan.token('localdate', () => {
   return new Date().toLocaleString('en-GB', {
