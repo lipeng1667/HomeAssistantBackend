@@ -3,13 +3,14 @@
  * @description Forum service layer for topic, reply, and interaction management
  * @author Michael Lee
  * @created 2025-07-10
- * @modified 2025-07-10
+ * @modified 2025-07-11
  * 
  * This service provides forum business logic including topic management, reply handling,
  * like/unlike functionality, search capabilities, and draft management separated from HTTP concerns.
  * 
  * Modification Log:
  * - 2025-07-10: Initial implementation with complete forum functionality
+ * - 2025-07-11: Added image retrieval integration with upload service
  * 
  * Functions:
  * - getTopics(filters): Get paginated topics with filtering and sorting
@@ -28,6 +29,7 @@
  * - getDrafts(userId, filters): Get user's saved drafts
  * - saveDraft(draftData): Save or update draft
  * - deleteDraft(draftId, userId): Delete draft (owner only)
+ * - fetchImagesByEntity(entityType, entityIds): Batch fetch images for entities
  * - buildTopicQuery(filters): Build SQL query for topic filtering
  * - buildReplyQuery(filters): Build SQL query for reply filtering
  * - buildSearchQuery(query, filters): Build SQL query for search
@@ -48,6 +50,53 @@
 const pool = require('../config/database');
 
 class ForumService {
+  /**
+   * @description Batch fetch images for multiple entities
+   * @async
+   * @function fetchImagesByEntity
+   * @param {string} entityType - Entity type ('topic' or 'reply')
+   * @param {Array<number>} entityIds - Array of entity IDs
+   * @returns {Promise<Object>} Object with entityId as key and images array as value
+   * @throws {Error} If database query fails
+   */
+  async fetchImagesByEntity(entityType, entityIds) {
+    if (!entityIds || entityIds.length === 0) {
+      return {};
+    }
+
+    try {
+      const placeholders = entityIds.map(() => '?').join(',');
+      const query = `
+        SELECT entity_id, file_url, original_filename, file_size, mime_type, created_at
+        FROM forum_uploads 
+        WHERE entity_type = ? AND entity_id IN (${placeholders}) AND status = 1
+        ORDER BY created_at ASC
+      `;
+      
+      const [rows] = await pool.execute(query, [entityType, ...entityIds]);
+      
+      // Group images by entity_id
+      const imagesByEntity = {};
+      for (const row of rows) {
+        const entityId = row.entity_id;
+        if (!imagesByEntity[entityId]) {
+          imagesByEntity[entityId] = [];
+        }
+        imagesByEntity[entityId].push({
+          url: row.file_url.replace('/uploads', 'http://47.94.108.189'),
+          filename: row.original_filename,
+          size: row.file_size,
+          mime_type: row.mime_type,
+          uploaded_at: row.created_at
+        });
+      }
+      
+      return imagesByEntity;
+    } catch (error) {
+      console.error('Error fetching images by entity:', error);
+      throw error;
+    }
+  }
   /**
    * Get paginated topics with filtering and sorting
    * @async
@@ -76,8 +125,12 @@ class ForumService {
     // Get topics
     const [topics] = await pool.execute(query, params);
     
+    // Fetch images for all topics
+    const topicIds = topics.map(topic => topic.id);
+    const imagesByTopic = await this.fetchImagesByEntity('topic', topicIds);
+    
     // Format topics and build pagination
-    const formattedTopics = topics.map(topic => this.formatTopicResponse(topic));
+    const formattedTopics = topics.map(topic => this.formatTopicResponse(topic, imagesByTopic[topic.id] || []));
     const pagination = this.buildPagination(page, limit, totalItems);
     
     return {
@@ -131,9 +184,14 @@ class ForumService {
       WHERE topic_id = ? AND status = 0
     `, [topicId]);
     
+    // Fetch images for topic and replies
+    const topicImages = await this.fetchImagesByEntity('topic', [topicId]);
+    const replyIds = replies.map(reply => reply.id);
+    const imagesByReply = await this.fetchImagesByEntity('reply', replyIds);
+    
     // Format responses
-    const topic = this.formatTopicResponse(topics[0]);
-    const formattedReplies = replies.map(reply => this.formatReplyResponse(reply));
+    const topic = this.formatTopicResponse(topics[0], topicImages[topicId] || []);
+    const formattedReplies = replies.map(reply => this.formatReplyResponse(reply, imagesByReply[reply.id] || []));
     const replyPagination = this.buildPagination(reply_page, reply_limit, replyCount[0].total);
     
     return {
@@ -394,7 +452,12 @@ class ForumService {
     `, [topicId]);
     
     const totalItems = countResult[0].total;
-    const formattedReplies = replies.map(reply => this.formatReplyResponse(reply));
+    
+    // Fetch images for all replies
+    const replyIds = replies.map(reply => reply.id);
+    const imagesByReply = await this.fetchImagesByEntity('reply', replyIds);
+    
+    const formattedReplies = replies.map(reply => this.formatReplyResponse(reply, imagesByReply[reply.id] || []));
     const pagination = this.buildPagination(page, limit, totalItems);
     
     return {
@@ -1029,10 +1092,11 @@ class ForumService {
    * Format topic object for API response
    * @function formatTopicResponse
    * @param {Object} topic - Raw topic data from database
+   * @param {Array} images - Array of image objects for this topic
    * @returns {Object} Formatted topic object
    * @sideEffects None - pure function
    */
-  formatTopicResponse(topic) {
+  formatTopicResponse(topic, images = []) {
     return {
       id: topic.id,
       title: topic.title,
@@ -1045,7 +1109,7 @@ class ForumService {
       reply_count: topic.reply_count,
       like_count: topic.like_count,
       status: topic.status,
-      images: [], // TODO: Implement image fetching
+      images: images.map(img => img.url), // Return only URLs for compatibility
       created_at: topic.created_at,
       updated_at: topic.updated_at
     };
@@ -1055,10 +1119,11 @@ class ForumService {
    * Format reply object for API response with nested reply support
    * @function formatReplyResponse
    * @param {Object} reply - Raw reply data from database
+   * @param {Array} images - Array of image objects for this reply
    * @returns {Object} Formatted reply object with parent reply info
    * @sideEffects None - pure function
    */
-  formatReplyResponse(reply) {
+  formatReplyResponse(reply, images = []) {
     const formattedReply = {
       id: reply.id,
       content: reply.content,
@@ -1070,7 +1135,7 @@ class ForumService {
       parent_reply: null,
       like_count: reply.like_count,
       is_liked: false, // TODO: Implement user-specific like status
-      images: [], // TODO: Implement image fetching
+      images: images.map(img => img.url), // Return only URLs for compatibility
       created_at: reply.created_at,
       updated_at: reply.updated_at
     };

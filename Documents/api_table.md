@@ -20,23 +20,23 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 | Method | Endpoint                         | Description                  |Done|
 | ------ | -------------------------------- | ---------------------------- |----|
-| GET    | `/api/forum/topics`              | List all topics with pagination | ❌ |
-| GET    | `/api/forum/topics/:id`          | Get topic details with replies  | ❌ |
-| POST   | `/api/forum/topics`              | Create a new topic           | ❌ |
-| PUT    | `/api/forum/topics/:id`          | Update topic (author only)   | ❌ |
-| DELETE | `/api/forum/topics/:id`          | Delete topic (author only)   | ❌ |
-| GET    | `/api/forum/topics/:id/replies`  | Get replies for a topic      | ❌ |
-| POST   | `/api/forum/topics/:id/replies`  | Add reply to topic           | ❌ |
-| PUT    | `/api/forum/replies/:id`         | Update reply (author only)   | ❌ |
-| DELETE | `/api/forum/replies/:id`         | Delete reply (author only)   | ❌ |
-| POST   | `/api/forum/topics/:id/like`     | Like/unlike topic            | ❌ |
-| POST   | `/api/forum/replies/:id/like`    | Like/unlike reply            | ❌ |
-| GET    | `/api/forum/search`              | Search topics and replies    | ❌ |
-| GET    | `/api/forum/categories`          | Get available categories     | ❌ |
-| POST   | `/api/forum/upload`              | Upload image attachments     | ❌ |
-| GET    | `/api/forum/drafts`              | Get user's saved drafts      | ❌ |
-| POST   | `/api/forum/drafts`              | Save/update draft            | ❌ |
-| DELETE | `/api/forum/drafts/:id`          | Delete draft                 | ❌ |
+| GET    | `/api/forum/topics`              | List all topics with pagination | ✅ |
+| GET    | `/api/forum/topics/:id`          | Get topic details with replies  | ✅ |
+| POST   | `/api/forum/topics`              | Create a new topic           | ✅ |
+| PUT    | `/api/forum/topics/:id`          | Update topic (author only)   | ✅ |
+| DELETE | `/api/forum/topics/:id`          | Delete topic (author only)   | ✅ |
+| GET    | `/api/forum/topics/:id/replies`  | Get replies for a topic      | ✅ |
+| POST   | `/api/forum/topics/:id/replies`  | Add reply to topic (or nested replies) | ✅ |
+| PUT    | `/api/forum/replies/:id`         | Update reply (author only)   | ✅ |
+| DELETE | `/api/forum/replies/:id`         | Delete reply (author only)   | ✅ |
+| POST   | `/api/forum/topics/:id/like`     | Like/unlike topic            | ✅ |
+| POST   | `/api/forum/replies/:id/like`    | Like/unlike reply            | ✅ |
+| GET    | `/api/forum/search`              | Search topics and replies    | ✅ |
+| GET    | `/api/forum/categories`          | Get available categories     | ✅ |
+| POST   | `/api/forum/upload`              | Upload image attachments     | ✅ |
+| GET    | `/api/forum/drafts`              | Get user's saved drafts      | ✅ |
+| POST   | `/api/forum/drafts`              | Save/update draft            | ✅ |
+| DELETE | `/api/forum/drafts/:id`          | Delete draft                 | ✅ |
 
 - 📩 Instant Messaging (IM)
 
@@ -114,7 +114,8 @@ All API endpoints return standardized error responses with the following format:
 
 | Status Code | Description | When It Occurs |
 |-------------|-------------|----------------|
-| **200** | Success | Request completed successfully |
+| **200** | Success | Request completed successfully (data retrieval, updates, deletes) |
+| **201** | Created | New resource created successfully (topics, replies, drafts) |
 | **400** | Bad Request | Missing required parameters, invalid input format |
 | **401** | Unauthorized | Invalid authentication, expired session, missing headers |
 | **403** | Forbidden | Access denied (e.g., localhost-only endpoints) |
