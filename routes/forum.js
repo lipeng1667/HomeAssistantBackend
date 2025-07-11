@@ -397,6 +397,7 @@ router.get('/topics/:id/replies', validateAppAuth, async (req, res) => {
  * @param {Object} req.body
  * @param {number} req.body.user_id - Author user ID
  * @param {string} req.body.content - Reply content
+ * @param {number} req.body.parent_reply_id - Parent reply ID for nested replies (optional)
  * @param {Array} req.body.images - Array of image URLs
  * 
  * @returns {Object} Response object
@@ -410,7 +411,7 @@ router.get('/topics/:id/replies', validateAppAuth, async (req, res) => {
 router.post('/topics/:id/replies', validateAppAuth, async (req, res) => {
   try {
     const topicId = parseInt(req.params.id);
-    const { user_id, content, images } = req.body;
+    const { user_id, content, parent_reply_id, images } = req.body;
 
     if (!user_id || !content) {
       return res.status(400).json({
@@ -437,6 +438,7 @@ router.post('/topics/:id/replies', validateAppAuth, async (req, res) => {
       topic_id: topicId,
       user_id,
       content,
+      parent_reply_id,
       images: images || []
     });
 

@@ -58,6 +58,7 @@ const forumTopicUpdateSchema = z.object({
 const forumReplySchema = z.object({
   user_id: z.number().int().positive('User ID must be a positive integer'),
   content: z.string().min(1, 'Content is required').max(1000, 'Content must be less than 1000 characters'),
+  parent_reply_id: z.number().int().positive('Parent reply ID must be a positive integer').optional(),
   images: z.array(z.string().url('Invalid image URL')).max(2, 'Maximum 2 images allowed').optional()
 })
 
@@ -140,7 +141,7 @@ const transformQuery = (query) => {
   const transformed = { ...query }
   
   // Convert numeric fields from strings
-  const numericFields = ['page', 'limit', 'user_id', 'topic_id', 'reply_page', 'reply_limit']
+  const numericFields = ['page', 'limit', 'user_id', 'topic_id', 'reply_page', 'reply_limit', 'parent_reply_id']
   numericFields.forEach(field => {
     if (transformed[field] !== undefined) {
       const num = parseInt(transformed[field], 10)

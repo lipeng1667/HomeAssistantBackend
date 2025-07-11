@@ -368,11 +368,20 @@ class ForumService {
     if (sort === 'oldest') sortClause = 'ORDER BY r.created_at ASC';
     if (sort === 'popular') sortClause = 'ORDER BY r.like_count DESC, r.created_at DESC';
     
-    // Get replies
+    // Get replies with parent reply information
     const [replies] = await pool.execute(`
-      SELECT r.*, u.username as author_name, u.id as author_id
+      SELECT 
+        r.*, 
+        u.username as author_name, 
+        u.id as author_id,
+        pr.id as parent_reply_id,
+        pr.content as parent_content,
+        pu.username as parent_author_name,
+        pu.id as parent_author_id
       FROM forum_replies r
       JOIN users u ON r.user_id = u.id
+      LEFT JOIN forum_replies pr ON r.parent_reply_id = pr.id
+      LEFT JOIN users pu ON pr.user_id = pu.id
       WHERE r.topic_id = ? AND r.status = 0
       ${sortClause}
       LIMIT ? OFFSET ?
@@ -402,13 +411,14 @@ class ForumService {
    * @param {number} replyData.topic_id - Parent topic ID
    * @param {number} replyData.user_id - Author user ID
    * @param {string} replyData.content - Reply content
+   * @param {number|null} replyData.parent_reply_id - Parent reply ID for nested replies
    * @param {Array} replyData.images - Array of image URLs
    * @returns {Promise<Object>} Created reply info
    * @throws {Error} Database transaction errors
    * @sideEffects Creates reply record with status -1 (awaiting review)
    */
   async createReply(replyData) {
-    const { topic_id, user_id, content, images = [] } = replyData;
+    const { topic_id, user_id, content, parent_reply_id = null, images = [] } = replyData;
     
     // Verify topic exists and is not deleted
     const [topics] = await pool.execute(`
@@ -419,6 +429,22 @@ class ForumService {
       throw new Error('Topic not found or closed');
     }
     
+    // If parent_reply_id is provided, verify parent reply exists and belongs to same topic
+    if (parent_reply_id) {
+      const [parentReplies] = await pool.execute(`
+        SELECT id, topic_id FROM forum_replies 
+        WHERE id = ? AND status = 0
+      `, [parent_reply_id]);
+      
+      if (parentReplies.length === 0) {
+        throw new Error('Parent reply not found or deleted');
+      }
+      
+      if (parentReplies[0].topic_id !== topic_id) {
+        throw new Error('Parent reply must belong to the same topic');
+      }
+    }
+    
     const connection = await pool.getConnection();
     
     try {
@@ -426,9 +452,9 @@ class ForumService {
       
       // Create reply with status -1 (awaiting review)
       const [result] = await connection.execute(`
-        INSERT INTO forum_replies (topic_id, user_id, content, status)
-        VALUES (?, ?, ?, -1)
-      `, [topic_id, user_id, content]);
+        INSERT INTO forum_replies (topic_id, user_id, parent_reply_id, content, status)
+        VALUES (?, ?, ?, ?, -1)
+      `, [topic_id, user_id, parent_reply_id, content]);
       
       const replyId = result.insertId;
       
@@ -1026,26 +1052,44 @@ class ForumService {
   }
 
   /**
-   * Format reply object for API response
+   * Format reply object for API response with nested reply support
    * @function formatReplyResponse
    * @param {Object} reply - Raw reply data from database
-   * @returns {Object} Formatted reply object
+   * @returns {Object} Formatted reply object with parent reply info
    * @sideEffects None - pure function
    */
   formatReplyResponse(reply) {
-    return {
+    const formattedReply = {
       id: reply.id,
       content: reply.content,
       author: {
         id: reply.author_id,
         name: reply.author_name
       },
+      parent_reply_id: reply.parent_reply_id,
+      parent_reply: null,
       like_count: reply.like_count,
       is_liked: false, // TODO: Implement user-specific like status
       images: [], // TODO: Implement image fetching
       created_at: reply.created_at,
       updated_at: reply.updated_at
     };
+
+    // Include parent reply information if this is a nested reply
+    if (reply.parent_reply_id && reply.parent_content) {
+      formattedReply.parent_reply = {
+        id: reply.parent_reply_id,
+        content: reply.parent_content.length > 100 
+          ? reply.parent_content.substring(0, 100) + '...' 
+          : reply.parent_content,
+        author: {
+          id: reply.parent_author_id,
+          name: reply.parent_author_name
+        }
+      };
+    }
+
+    return formattedReply;
   }
 
   /**

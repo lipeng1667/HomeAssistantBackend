@@ -141,6 +141,8 @@ see [Pagination STRUCTURE](#pagination-structure)
 | `id` | Integer | Reply unique ID |
 | `content` | String | Reply content |
 | `author` | Object | Author information (same as topic) |
+| `parent_reply_id` | Integer/null | Parent reply ID (null for top-level replies) |
+| `parent_reply` | Object/null | Parent reply info (for nested replies) |
 | `like_count` | Integer | Number of likes |
 | `is_liked` | Boolean | Whether current user liked this reply |
 | `images` | Array | Array of image URLs |
@@ -355,7 +357,13 @@ see [Pagination STRUCTURE](#pagination-structure)
 
 ## POST /api/forum/topics/:id/replies
 
-Adds a reply to an existing topic.
+Adds a reply to an existing topic or creates a nested reply to another reply.
+
+**Nested Reply Support:**
+
+- To reply to the main topic: omit `parent_reply_id` parameter
+- To reply to a specific reply: include `parent_reply_id` with the target reply's ID
+- Nested replies maintain the same topic context but show hierarchical relationship
 
 `Like the post, new reply should be review by admin then could be published, set status from -1 to 0`
 
@@ -373,9 +381,10 @@ Adds a reply to an existing topic.
 |---|---|---|---|
 | `user_id` | Integer | Reply author user ID | Yes |
 | `content` | String | Reply content (1-1000 characters) | Yes |
+| `parent_reply_id` | Integer | Parent reply ID (for nested replies) | No |
 | `images` | Array | Array of image URLs (max 2) | No |
 
-**Example Request:**
+**Example Request (Reply to Topic):**
 
 ```bash
 curl -X POST http://localhost:10000/api/forum/topics/1/replies \
@@ -386,6 +395,21 @@ curl -X POST http://localhost:10000/api/forum/topics/1/replies \
     "user_id": 456,
     "content": "Great question! I had the same issue and solved it by...",
     "images": ["https://api.example.com/uploads/solution_image.jpg"]
+  }'
+```
+
+**Example Request (Reply to Reply):**
+
+```bash
+curl -X POST http://localhost:10000/api/forum/topics/1/replies \
+  -H "Content-Type: application/json" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -d '{
+    "user_id": 789,
+    "content": "Thanks for the tip! This worked perfectly for me too.",
+    "parent_reply_id": 25,
+    "images": []
   }'
 ```
 
