@@ -4,7 +4,7 @@ Handles forum topics, replies, and community interactions.
 
 ## GET /api/forum/topics
 
-Retrieves a paginated list of forum topics with filtering and sorting options.
+Retrieves a paginated list of forum topics with filtering and sorting options. When `user_id` is provided, includes the user's under-review topics (status=-1) and sorts them at the top of results.
 
 **App Authentication:** Required (see headers in `api_table.md`)
 
@@ -17,11 +17,12 @@ Retrieves a paginated list of forum topics with filtering and sorting options.
 | `category` | String | Filter by category | No | All |
 | `sort` | String | Sort order: "newest", "oldest", "popular", "trending" | No | "newest" |
 | `search` | String | Search in title and content | No | None |
+| `user_id` | Integer | Include user's under-review content and prioritize at top | No | None |
 
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/api/forum/topics?page=1&limit=20&category=Smart&sort=popular" \
+curl -X GET "http://localhost:10000/api/forum/topics?page=1&limit=20&category=Smart&sort=popular&user_id=123" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..."
 ```
@@ -45,7 +46,7 @@ curl -X GET "http://localhost:10000/api/forum/topics?page=1&limit=20&category=Sm
 | `category` | String | Topic category |
 | `reply_count` | Integer | Number of replies |
 | `like_count` | Integer | Number of likes |
-| `status` | Integer | -1 = default(wait for review); 0 = published; 1 = deleted |
+| `status` | Integer | -1 = under review (only visible to author); 0 = published; 1 = deleted |
 | `created_at` | String | ISO timestamp of creation |
 | `updated_at` | String | ISO timestamp of last update |
 
@@ -107,11 +108,12 @@ Retrieves detailed information about a specific topic including replies.
 |---|---|---|---|---|
 | `reply_page` | Integer | Reply page number | No | 1 |
 | `reply_limit` | Integer | Replies per page (1-50) | No | 20 |
+| `user_id` | Integer | Include user's under-review replies and prioritize at top | No | None |
 
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/api/forum/topics/1?reply_page=1&reply_limit=20" \
+curl -X GET "http://localhost:10000/api/forum/topics/1?reply_page=1&reply_limit=20&user_id=123" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..."
 ```
@@ -179,6 +181,7 @@ see [Pagination STRUCTURE](#pagination-structure)
           "id": 456,
           "name": "Jane Smith"
         },
+        "status" : -1,
         "like_count": 5,
         "is_liked": false,
         "images": ["https://api.example.com/uploads/reply_image1.jpg"],
@@ -192,6 +195,7 @@ see [Pagination STRUCTURE](#pagination-structure)
           "id": 789,
           "name": "Mike Johnson"
         },
+        "status" : 0,
         "like_count": 3,
         "is_liked": true,
         "images": [],
@@ -274,7 +278,7 @@ curl -X POST http://localhost:10000/api/forum/topics \
 
 ## GET /api/forum/topics/:id/replies
 
-Retrieves replies for a specific topic with pagination.
+Retrieves replies for a specific topic with pagination. When `user_id` is provided, includes the user's under-review replies (status=-1) and sorts them at the top of results.
 
 **App Authentication:** Required (see headers in `api_table.md`)
 
@@ -286,11 +290,12 @@ Retrieves replies for a specific topic with pagination.
 | `page` | Integer | Page number (1-based) | No | 1 |
 | `limit` | Integer | Replies per page (1-50) | No | 20 |
 | `sort` | String | Sort order: "newest", "oldest", "popular" | No | "newest" |
+| `user_id` | Integer | Include user's under-review replies and prioritize at top | No | None |
 
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/api/forum/topics/1/replies?page=1&limit=20&sort=newest" \
+curl -X GET "http://localhost:10000/api/forum/topics/1/replies?page=1&limit=20&sort=newest&user_id=123" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..."
 ```
@@ -319,6 +324,7 @@ see [Pagination STRUCTURE](#pagination-structure)
 | `author.name` | String | Author display name |
 | `like_count` | Integer | Number of likes |
 | `is_liked` | Boolean | Whether current user liked this reply |
+| `status` | Integer | -1 = under review (only visible to author); 0 = published; 1 = deleted |
 | `images` | Array | Array of image URLs |
 | `created_at` | String | ISO timestamp of creation |
 | `updated_at` | String | ISO timestamp of last update |
@@ -337,6 +343,7 @@ see [Pagination STRUCTURE](#pagination-structure)
           "id": 456,
           "name": "Jane Smith"
         },
+        "status" : -1,
         "like_count": 5,
         "is_liked": false,
         "images": ["https://api.example.com/uploads/reply_image.jpg"],

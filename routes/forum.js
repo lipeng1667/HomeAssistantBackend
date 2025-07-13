@@ -58,6 +58,7 @@ const { validate, schemas } = require('../middleware/validation');
  * @param {string} req.query.category - Filter by category
  * @param {string} req.query.sort - Sort order: newest, oldest, popular, trending
  * @param {string} req.query.search - Search term
+ * @param {number} req.query.user_id - Include user's under-review content and prioritize at top
  * 
  * @returns {Object} Response object
  * @returns {string} Response.status - Success/error status
@@ -68,12 +69,24 @@ const { validate, schemas } = require('../middleware/validation');
  */
 router.get('/topics', validateAppAuth, async (req, res) => {
   try {
+    // Validate user_id if provided
+    if (req.query.user_id) {
+      const userId = parseInt(req.query.user_id);
+      if (isNaN(userId) || userId <= 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'user_id must be a positive integer'
+        });
+      }
+    }
+
     const filters = {
       page: parseInt(req.query.page) || 1,
       limit: Math.min(parseInt(req.query.limit) || 20, 50),
       category: req.query.category,
       sort: req.query.sort || 'newest',
-      search: req.query.search
+      search: req.query.search,
+      user_id: req.query.user_id ? parseInt(req.query.user_id) : null
     };
 
     const result = await forumService.getTopics(filters);
@@ -177,6 +190,7 @@ router.post('/topics', validateAppAuth, async (req, res) => {
  * @param {Object} req.query
  * @param {number} req.query.reply_page - Reply page number
  * @param {number} req.query.reply_limit - Replies per page
+ * @param {number} req.query.user_id - Include user's under-review replies and prioritize at top
  * 
  * @returns {Object} Response object
  * @returns {string} Response.status - Success/error status
@@ -187,10 +201,22 @@ router.post('/topics', validateAppAuth, async (req, res) => {
  */
 router.get('/topics/:id', validateAppAuth, async (req, res) => {
   try {
+    // Validate user_id if provided
+    if (req.query.user_id) {
+      const userId = parseInt(req.query.user_id);
+      if (isNaN(userId) || userId <= 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'user_id must be a positive integer'
+        });
+      }
+    }
+
     const topicId = parseInt(req.params.id);
     const replyFilters = {
       reply_page: parseInt(req.query.reply_page) || 1,
-      reply_limit: Math.min(parseInt(req.query.reply_limit) || 20, 50)
+      reply_limit: Math.min(parseInt(req.query.reply_limit) || 20, 50),
+      user_id: req.query.user_id ? parseInt(req.query.user_id) : null
     };
 
     const result = await forumService.getTopicById(topicId, replyFilters);
@@ -355,6 +381,7 @@ router.delete('/topics/:id', validateAppAuth, async (req, res) => {
  * @param {number} req.query.page - Page number
  * @param {number} req.query.limit - Items per page
  * @param {string} req.query.sort - Sort order
+ * @param {number} req.query.user_id - Include user's under-review replies and prioritize at top
  * 
  * @returns {Object} Response object
  * @returns {string} Response.status - Success/error status
@@ -364,11 +391,23 @@ router.delete('/topics/:id', validateAppAuth, async (req, res) => {
  */
 router.get('/topics/:id/replies', validateAppAuth, async (req, res) => {
   try {
+    // Validate user_id if provided
+    if (req.query.user_id) {
+      const userId = parseInt(req.query.user_id);
+      if (isNaN(userId) || userId <= 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'user_id must be a positive integer'
+        });
+      }
+    }
+
     const topicId = parseInt(req.params.id);
     const filters = {
       page: parseInt(req.query.page) || 1,
       limit: Math.min(parseInt(req.query.limit) || 20, 50),
-      sort: req.query.sort || 'newest'
+      sort: req.query.sort || 'newest',
+      user_id: req.query.user_id ? parseInt(req.query.user_id) : null
     };
 
     const result = await forumService.getReplies(topicId, filters);

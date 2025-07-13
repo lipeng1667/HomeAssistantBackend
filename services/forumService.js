@@ -107,19 +107,21 @@ class ForumService {
    * @param {string} filters.category - Filter by category name
    * @param {string} filters.sort - Sort order: newest, oldest, popular, trending
    * @param {string} filters.search - Search term for title/content
+   * @param {number} filters.user_id - Include user's under-review content and prioritize at top
    * @returns {Promise<Object>} Topics with pagination info
    * @throws {Error} Database query errors
    * @sideEffects None - read-only database operation
    */
   async getTopics(filters = {}) {
-    const { page = 1, limit = 20, category, sort = 'newest', search } = filters;
+    const { page = 1, limit = 20, category, sort = 'newest', search, user_id } = filters;
     const offset = (page - 1) * limit;
     
-    const { query, params } = this.buildTopicQuery({ category, sort, search, limit, offset });
+    const { query, params } = this.buildTopicQuery({ category, sort, search, user_id, limit, offset });
     
     // Get total count for pagination
     const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM').replace(/ORDER BY[\s\S]*?LIMIT[\s\S]*$/, '');
-    const [countResult] = await pool.execute(countQuery, params.slice(0, -2)); // Remove limit and offset params
+    const countParams = params.slice(0, -2); // Remove limit and offset params
+    const [countResult] = await pool.execute(countQuery, countParams);
     const totalItems = countResult[0].total;
     
     // Get topics
@@ -147,24 +149,61 @@ class ForumService {
    * @param {Object} replyFilters - Reply pagination filters
    * @param {number} replyFilters.reply_page - Reply page number
    * @param {number} replyFilters.reply_limit - Replies per page
+   * @param {number} replyFilters.user_id - Include user's under-review replies and prioritize at top
    * @returns {Promise<Object>} Topic with replies and pagination
    * @throws {Error} Database query errors or topic not found
    * @sideEffects None - read-only database operation
    */
   async getTopicById(topicId, replyFilters = {}) {
-    const { reply_page = 1, reply_limit = 20 } = replyFilters;
+    const { reply_page = 1, reply_limit = 20, user_id } = replyFilters;
     
-    // Get topic details
-    const [topics] = await pool.execute(`
+    // Get topic details - include user's own under-review topics if user_id provided
+    let topicQuery = `
       SELECT t.*, c.name as category, u.username as author_name, u.id as author_id
       FROM forum_topics t
       JOIN forum_categories c ON t.category_id = c.id
       JOIN users u ON t.user_id = u.id
-      WHERE t.id = ? AND t.status = 0
-    `, [topicId]);
+      WHERE t.id = ?
+    `;
+    let topicParams = [topicId];
+    
+    if (user_id) {
+      // Include user's own under-review topics AND all published topics
+      topicQuery += ' AND (t.status = 0 OR (t.status = -1 AND t.user_id = ?))';
+      topicParams.push(user_id);
+    } else {
+      // Only published topics
+      topicQuery += ' AND t.status = 0';
+    }
+    
+    const [topics] = await pool.execute(topicQuery, topicParams);
     
     if (topics.length === 0) {
       throw new Error('Topic not found');
+    }
+    
+    // Build WHERE clause for user-specific replies
+    let whereClause = 'WHERE r.topic_id = ?';
+    let queryParams = [topicId];
+    
+    if (user_id) {
+      // Include user's own under-review replies AND all published replies
+      whereClause += ' AND (r.status = 0 OR (r.status = -1 AND r.user_id = ?))';
+      queryParams.push(user_id);
+    } else {
+      // Only published replies
+      whereClause += ' AND r.status = 0';
+    }
+    
+    // Build sort clause with user prioritization
+    let sortClause;
+    if (user_id) {
+      // Prioritize user's replies at top, then chronological order
+      sortClause = 'ORDER BY (r.user_id = ?) DESC, r.created_at ASC';
+      queryParams.push(user_id);
+    } else {
+      // Normal chronological sorting
+      sortClause = 'ORDER BY r.created_at ASC';
     }
     
     // Get replies with pagination
@@ -173,16 +212,17 @@ class ForumService {
       SELECT r.*, u.username as author_name, u.id as author_id
       FROM forum_replies r
       JOIN users u ON r.user_id = u.id
-      WHERE r.topic_id = ? AND r.status = 0
-      ORDER BY r.created_at ASC
+      ${whereClause}
+      ${sortClause}
       LIMIT ? OFFSET ?
-    `, [topicId, reply_limit, replyOffset]);
+    `, [...queryParams, reply_limit, replyOffset]);
     
-    // Get total reply count
+    // Get total reply count with same WHERE clause
+    const countParams = user_id ? [topicId, user_id] : [topicId];
     const [replyCount] = await pool.execute(`
-      SELECT COUNT(*) as total FROM forum_replies 
-      WHERE topic_id = ? AND status = 0
-    `, [topicId]);
+      SELECT COUNT(*) as total FROM forum_replies r
+      ${whereClause}
+    `, countParams);
     
     // Fetch images for topic and replies
     const topicImages = await this.fetchImagesByEntity('topic', [topicId]);
@@ -412,19 +452,49 @@ class ForumService {
    * @param {number} filters.page - Page number
    * @param {number} filters.limit - Items per page
    * @param {string} filters.sort - Sort order: newest, oldest, popular
+   * @param {number} filters.user_id - Include user's under-review replies and prioritize at top
    * @returns {Promise<Object>} Replies with pagination
    * @throws {Error} Database query errors
    * @sideEffects None - read-only database operation
    */
   async getReplies(topicId, filters = {}) {
-    const { page = 1, limit = 20, sort = 'newest' } = filters;
+    const { page = 1, limit = 20, sort = 'newest', user_id } = filters;
     const offset = (page - 1) * limit;
     
-    // Build sort clause
-    let sortClause = 'ORDER BY r.created_at ASC';
-    if (sort === 'newest') sortClause = 'ORDER BY r.created_at DESC';
-    if (sort === 'oldest') sortClause = 'ORDER BY r.created_at ASC';
-    if (sort === 'popular') sortClause = 'ORDER BY r.like_count DESC, r.created_at DESC';
+    // Build WHERE clause for user-specific content
+    let whereClause = 'WHERE r.topic_id = ?';
+    let queryParams = [topicId];
+    
+    if (user_id) {
+      // Include user's own under-review replies AND all published replies
+      whereClause += ' AND (r.status = 0 OR (r.status = -1 AND r.user_id = ?))';
+      queryParams.push(user_id);
+    } else {
+      // Only published replies
+      whereClause += ' AND r.status = 0';
+    }
+    
+    // Build sort clause with user prioritization
+    let sortClause;
+    if (user_id) {
+      // Prioritize user's content at top, then apply normal sorting
+      if (sort === 'newest') {
+        sortClause = 'ORDER BY (r.user_id = ?) DESC, r.created_at DESC';
+      } else if (sort === 'oldest') {
+        sortClause = 'ORDER BY (r.user_id = ?) DESC, r.created_at ASC';
+      } else if (sort === 'popular') {
+        sortClause = 'ORDER BY (r.user_id = ?) DESC, r.like_count DESC, r.created_at DESC';
+      } else {
+        sortClause = 'ORDER BY (r.user_id = ?) DESC, r.created_at ASC';
+      }
+      queryParams.push(user_id);
+    } else {
+      // Normal sorting without user prioritization
+      if (sort === 'newest') sortClause = 'ORDER BY r.created_at DESC';
+      else if (sort === 'oldest') sortClause = 'ORDER BY r.created_at ASC';
+      else if (sort === 'popular') sortClause = 'ORDER BY r.like_count DESC, r.created_at DESC';
+      else sortClause = 'ORDER BY r.created_at ASC';
+    }
     
     // Get replies with parent reply information
     const [replies] = await pool.execute(`
@@ -440,16 +510,17 @@ class ForumService {
       JOIN users u ON r.user_id = u.id
       LEFT JOIN forum_replies pr ON r.parent_reply_id = pr.id
       LEFT JOIN users pu ON pr.user_id = pu.id
-      WHERE r.topic_id = ? AND r.status = 0
+      ${whereClause}
       ${sortClause}
       LIMIT ? OFFSET ?
-    `, [topicId, limit, offset]);
+    `, [...queryParams, limit, offset]);
     
-    // Get total count
+    // Get total count with same WHERE clause
+    const countParams = user_id ? [topicId, user_id] : [topicId];
     const [countResult] = await pool.execute(`
-      SELECT COUNT(*) as total FROM forum_replies 
-      WHERE topic_id = ? AND status = 0
-    `, [topicId]);
+      SELECT COUNT(*) as total FROM forum_replies r
+      ${whereClause}
+    `, countParams);
     
     const totalItems = countResult[0].total;
     
@@ -1046,16 +1117,25 @@ class ForumService {
    * @sideEffects None - pure function
    */
   buildTopicQuery(filters) {
-    const { category, sort, search, limit, offset } = filters;
+    const { category, sort, search, user_id, limit, offset } = filters;
     let query = `
       SELECT t.*, c.name as category, u.username as author_name, u.id as author_id
       FROM forum_topics t
       JOIN forum_categories c ON t.category_id = c.id
       JOIN users u ON t.user_id = u.id
-      WHERE t.status = 0
     `;
     
     const params = [];
+    
+    // Build WHERE clause for user-specific content
+    if (user_id) {
+      // Include user's own under-review topics AND all published topics
+      query += ' WHERE (t.status = 0 OR (t.status = -1 AND t.user_id = ?))';
+      params.push(user_id);
+    } else {
+      // Only published topics
+      query += ' WHERE t.status = 0';
+    }
     
     if (category) {
       query += ' AND c.name = ?';
@@ -1067,19 +1147,38 @@ class ForumService {
       params.push(`%${search}%`, `%${search}%`);
     }
     
-    // Add sorting
-    switch (sort) {
-      case 'oldest':
-        query += ' ORDER BY t.created_at ASC';
-        break;
-      case 'popular':
-        query += ' ORDER BY t.like_count DESC, t.created_at DESC';
-        break;
-      case 'trending':
-        query += ' ORDER BY t.view_count DESC, t.created_at DESC';
-        break;
-      default: // newest
-        query += ' ORDER BY t.created_at DESC';
+    // Add sorting with user prioritization
+    if (user_id) {
+      // Prioritize user's content at top, then apply normal sorting
+      switch (sort) {
+        case 'oldest':
+          query += ' ORDER BY (t.user_id = ?) DESC, t.created_at ASC';
+          break;
+        case 'popular':
+          query += ' ORDER BY (t.user_id = ?) DESC, t.like_count DESC, t.created_at DESC';
+          break;
+        case 'trending':
+          query += ' ORDER BY (t.user_id = ?) DESC, t.view_count DESC, t.created_at DESC';
+          break;
+        default: // newest
+          query += ' ORDER BY (t.user_id = ?) DESC, t.created_at DESC';
+      }
+      params.push(user_id);
+    } else {
+      // Normal sorting without user prioritization
+      switch (sort) {
+        case 'oldest':
+          query += ' ORDER BY t.created_at ASC';
+          break;
+        case 'popular':
+          query += ' ORDER BY t.like_count DESC, t.created_at DESC';
+          break;
+        case 'trending':
+          query += ' ORDER BY t.view_count DESC, t.created_at DESC';
+          break;
+        default: // newest
+          query += ' ORDER BY t.created_at DESC';
+      }
     }
     
     query += ' LIMIT ? OFFSET ?';
@@ -1135,6 +1234,7 @@ class ForumService {
       parent_reply: null,
       like_count: reply.like_count,
       is_liked: false, // TODO: Implement user-specific like status
+      status: reply.status,
       images: images.map(img => img.url), // Return only URLs for compatibility
       created_at: reply.created_at,
       updated_at: reply.updated_at
