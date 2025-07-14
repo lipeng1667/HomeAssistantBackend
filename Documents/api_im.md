@@ -25,12 +25,17 @@ The HomeAssistant IM system provides real-time messaging capabilities between us
 #### Request
 
 ```http
-GET /api/chat/messages
+GET /api/chat/messages?user_id=123&page=1&limit=50
 Headers:
   X-Timestamp: 1673123456789
   X-Signature: abc123...
-  Authorization: Bearer <user_token>
 ```
+
+#### Query Parameters
+
+- `user_id` (required): User ID for authentication
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Messages per page (default: 50, max: 100)
 
 #### Response
 
@@ -44,7 +49,7 @@ Headers:
         "id": 1,
         "conversation_id": 123,
         "sender_role": "user",
-        "message": "Hello, I need help",
+        "content": "Hello, I need help",
         "timestamp": "2025-07-14T10:30:00Z",
         "sender_identifier": "user_uuid_123"
       },
@@ -52,11 +57,17 @@ Headers:
         "id": 2,
         "conversation_id": 123,
         "sender_role": "admin",
-        "message": "How can I help you?",
+        "content": "How can I help you?",
         "timestamp": "2025-07-14T10:31:00Z",
-        "sender_identifier": "admin_username"
+        "sender_identifier": "admin_1"
       }
-    ]
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 2,
+      "pages": 1
+    }
   }
 }
 ```
@@ -639,8 +650,8 @@ class NotificationService {
 ### Authentication Flow
 
 1. **App-level Authentication**: X-Timestamp + X-Signature headers
-2. **User Authentication**: Bearer token in Authorization header
-3. **WebSocket Authentication**: Token passed in socket auth config
+2. **User Authentication**: user_id in request body with Redis session validation
+3. **WebSocket Authentication**: user_id passed in socket auth config
 
 ### Message Security
 

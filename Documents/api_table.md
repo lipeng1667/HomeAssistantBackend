@@ -52,6 +52,7 @@ This document provides a detailed reference for the Home Assistant Backend API.
 | GET    | `/api/chat/search`                 | Search messages in conversations          | 🔄 |
 
 **WebSocket Events (Real-time)**
+
 - `new_message` - New message received
 - `typing_indicator` - User typing status
 - `message_read` - Message read receipt

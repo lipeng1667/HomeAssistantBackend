@@ -83,7 +83,7 @@ class SocketService {
 
       // Verify user exists in database
       const [users] = await pool.execute(
-        'SELECT id, username, uuid FROM users WHERE id = ? AND status = 0',
+        'SELECT id, username, device_id FROM users WHERE id = ? AND status = 0',
         [userId]
       );
 
@@ -238,7 +238,7 @@ class SocketService {
         content,
         file_id,
         timestamp: new Date().toISOString(),
-        sender_identifier: userInfo.uuid
+        sender_identifier: `user_${userInfo.device_id}`
       };
 
       // Emit to conversation room
@@ -284,7 +284,7 @@ class SocketService {
         conversation_id,
         sender_role: 'user',
         typing,
-        sender_identifier: userInfo.uuid
+        sender_identifier: `user_${userInfo.device_id}`
       });
 
       console.log(`⌨️  User ${userId} ${typing ? 'started' : 'stopped'} typing in conversation ${conversation_id}`);

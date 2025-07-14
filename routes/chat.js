@@ -44,9 +44,30 @@ const { v4: uuidv4 } = require('uuid');
  * 
  * @throws {500} If server error occurs
  */
-router.get('/messages', authenticateUser, async (req, res) => {
+router.get('/messages', async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Get user_id from query parameters for GET request
+    const userId = parseInt(req.query.user_id);
+
+    if (!userId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'user_id query parameter is required'
+      });
+    }
+
+    // Validate user exists and is active
+    const [users] = await pool.execute(
+      'SELECT id, device_id FROM users WHERE id = ? AND status = 0',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'User not found or inactive'
+      });
+    }
 
     // Get or create conversation
     let [conversations] = await pool.execute(
@@ -65,19 +86,31 @@ router.get('/messages', authenticateUser, async (req, res) => {
       conversationId = conversations[0].id;
     }
 
-    // Get messages
+    // Get pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = (page - 1) * limit;
+
+    // Get messages with pagination
     const [messages] = await pool.execute(`
             SELECT m.*, 
                    CASE 
-                       WHEN m.sender_role = 'admin' THEN a.username
-                       ELSE u.uuid
+                       WHEN m.sender_role = 'admin' THEN CONCAT('admin_', COALESCE(m.admin_id, 'system'))
+                       ELSE CONCAT('user_', u.device_id)
                    END as sender_identifier
             FROM messages m
             LEFT JOIN users u ON m.sender_role = 'user' AND m.user_id = u.id
-            LEFT JOIN admins a ON m.sender_role = 'admin' AND m.admin_id = a.id
             WHERE m.conversation_id = ?
-            ORDER BY m.timestamp ASC
-        `, [conversationId]);
+            ORDER BY m.timestamp 
+            LIMIT ? OFFSET ?
+        `, [conversationId, limit, offset]);
+
+    // Get total count for pagination
+    const [totalResult] = await pool.execute(
+      'SELECT COUNT(*) as total FROM messages WHERE conversation_id = ?',
+      [conversationId]
+    );
+    const total = totalResult[0].total;
 
     // Log the activity
     await pool.execute(
@@ -89,7 +122,13 @@ router.get('/messages', authenticateUser, async (req, res) => {
       status: 'success',
       data: {
         conversation_id: conversationId,
-        messages
+        messages,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
       }
     });
   } catch (error) {
@@ -150,7 +189,7 @@ router.post('/messages', authenticateUser, async (req, res) => {
 
     // Insert message
     const [result] = await pool.execute(
-      'INSERT INTO messages (conversation_id, user_id, sender_role, message) VALUES (?, ?, "user", ?)',
+      'INSERT INTO messages (conversation_id, user_id, sender_role, content) VALUES (?, ?, "user", ?)',
       [conversationId, userId, message]
     );
 
@@ -180,7 +219,7 @@ router.post('/messages', authenticateUser, async (req, res) => {
         ...messageData,
         content: message,
         message_type: 'text',
-        sender_identifier: req.user?.uuid || 'user'
+        sender_identifier: req.user?.device_id ? `user_${req.user.device_id}` : 'user'
       });
     }
 
@@ -497,7 +536,7 @@ router.post('/conversations/:id/typing', authenticateUser, async (req, res) => {
         conversation_id: conversationId,
         sender_role: 'user',
         typing: typing,
-        sender_identifier: req.user.uuid
+        sender_identifier: `user_${req.user.device_id}`
       });
     }
 
@@ -564,7 +603,7 @@ router.get('/search', authenticateUser, async (req, res) => {
       JOIN conversations c ON m.conversation_id = c.id
       WHERE c.user_id = ? AND MATCH(m.content) AGAINST(? IN BOOLEAN MODE)
     `;
-    
+
     const queryParams = [userId, q];
 
     if (conversation_id) {
@@ -584,9 +623,9 @@ router.get('/search', authenticateUser, async (req, res) => {
       JOIN conversations c ON m.conversation_id = c.id
       WHERE c.user_id = ? AND MATCH(m.content) AGAINST(? IN BOOLEAN MODE)
     `;
-    
+
     const countParams = [userId, q];
-    
+
     if (conversation_id) {
       countQuery += ' AND m.conversation_id = ?';
       countParams.push(parseInt(conversation_id));
@@ -658,7 +697,7 @@ const upload = multer({
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/plain'
     ];
-    
+
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -766,7 +805,7 @@ router.post('/upload', authenticateUser, upload.single('file'), async (req, res)
     if (global.socketService) {
       global.socketService.emitToConversation(conversation_id, 'new_message', {
         ...messageData,
-        sender_identifier: req.user?.uuid || 'user'
+        sender_identifier: req.user?.device_id ? `user_${req.user.device_id}` : 'user'
       });
     }
 
@@ -789,7 +828,7 @@ router.post('/upload', authenticateUser, upload.single('file'), async (req, res)
     });
   } catch (error) {
     console.error('Error uploading chat file:', error);
-    
+
     // Clean up uploaded file on error
     if (req.file && req.file.path) {
       try {
@@ -798,7 +837,7 @@ router.post('/upload', authenticateUser, upload.single('file'), async (req, res)
         console.error('Error cleaning up file:', cleanupError);
       }
     }
-    
+
     // Handle specific error types
     if (error.message.includes('File size exceeds')) {
       res.status(413).json({
