@@ -324,9 +324,9 @@ class ForumService {
   async updateTopic(topicId, userId, updates) {
     const { title, content, category, images } = updates;
     
-    // Verify ownership
+    // Verify ownership - allow editing of user's own topics regardless of status
     const [topics] = await pool.execute(`
-      SELECT user_id FROM forum_topics WHERE id = ? AND status = 0
+      SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0)
     `, [topicId]);
     
     if (topics.length === 0) {
@@ -421,9 +421,9 @@ class ForumService {
    * @sideEffects Sets topic status to 1 (deleted)
    */
   async deleteTopic(topicId, userId) {
-    // Verify ownership
+    // Verify ownership - allow deletion of user's own topics regardless of status
     const [topics] = await pool.execute(`
-      SELECT user_id FROM forum_topics WHERE id = ? AND status = 0
+      SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0)
     `, [topicId]);
     
     if (topics.length === 0) {
@@ -633,9 +633,9 @@ class ForumService {
   async updateReply(replyId, userId, updates) {
     const { content, images } = updates;
     
-    // Verify ownership
+    // Verify ownership - allow editing of user's own replies regardless of status
     const [replies] = await pool.execute(`
-      SELECT user_id FROM forum_replies WHERE id = ? AND status = 0
+      SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0)
     `, [replyId]);
     
     if (replies.length === 0) {
@@ -708,9 +708,9 @@ class ForumService {
    * @sideEffects Sets reply status to 1 (deleted)
    */
   async deleteReply(replyId, userId) {
-    // Verify ownership
+    // Verify ownership - allow deletion of user's own replies regardless of status
     const [replies] = await pool.execute(`
-      SELECT user_id FROM forum_replies WHERE id = ? AND status = 0
+      SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0)
     `, [replyId]);
     
     if (replies.length === 0) {
