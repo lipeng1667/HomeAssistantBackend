@@ -89,6 +89,9 @@ const chatRoutes = require('./routes/chat')
 const logRoutes = require('./routes/logs')
 const healthRoutes = require('./routes/health')
 
+// Import Socket.io service
+const socketService = require('./services/socketService')
+
 const app = express();
 
 // Ensure logs directory exists
@@ -98,10 +101,14 @@ if (!fs.existsSync(logsDir)) {
 }
 
 // Ensure upload directories exist
-const uploadDir = path.join(__dirname, 'uploads', 'forum');
+const forumUploadDir = path.join(__dirname, 'uploads', 'forum');
+const chatUploadDir = path.join(__dirname, 'uploads', 'chat');
 const tempDir = path.join(__dirname, 'temp');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(forumUploadDir)) {
+  fs.mkdirSync(forumUploadDir, { recursive: true });
+}
+if (!fs.existsSync(chatUploadDir)) {
+  fs.mkdirSync(chatUploadDir, { recursive: true });
 }
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
@@ -189,6 +196,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 // Serve uploaded files statically
 app.use('/uploads/forum', express.static(path.join(__dirname, 'uploads', 'forum'), {
+  maxAge: '1d', // Cache for 1 day
+  etag: true,
+  lastModified: true
+}))
+
+// Serve chat uploaded files statically
+app.use('/uploads/chat', express.static(path.join(__dirname, 'uploads', 'chat'), {
   maxAge: '1d', // Cache for 1 day
   etag: true,
   lastModified: true
@@ -302,6 +316,10 @@ const server = app.listen(config.server.port, config.server.host, () => {
   console.log(`📊 Environment: ${config.server.env}`)
   console.log(`🔗 Health check: http://${config.server.host}:${config.server.port}/health`)
 })
+
+// Initialize Socket.io for real-time messaging
+socketService.initializeSocket(server)
+global.socketService = socketService
 
 // Track active HTTP connections with Redis cluster-wide aggregation
 server.on('connection', (socket) => {

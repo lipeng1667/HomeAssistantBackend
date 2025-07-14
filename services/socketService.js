@@ -1,0 +1,402 @@
+/**
+ * @file services/socketService.js
+ * @description Socket.io service for real-time messaging functionality
+ * @author Michael Lee
+ * @created 2025-07-14
+ * @modified 2025-07-14
+ * 
+ * This service handles WebSocket connections for real-time messaging between
+ * users and admins. It provides room-based messaging, typing indicators,
+ * and connection management.
+ * 
+ * Functions:
+ * - initializeSocket(server): Initialize Socket.io with HTTP server
+ * - authenticateSocket(socket, next): Authenticate WebSocket connections
+ * - handleConnection(socket): Handle new WebSocket connections
+ * - handleJoinConversation(socket, data): Join conversation room
+ * - handleSendMessage(socket, data): Send real-time message
+ * - handleTypingIndicator(socket, data): Handle typing indicators
+ * - handleDisconnect(socket): Handle client disconnection
+ * - emitToConversation(conversationId, event, data): Emit to conversation room
+ * - emitToUser(userId, event, data): Emit to specific user
+ * 
+ * Dependencies:
+ * - socket.io: WebSocket library
+ * - config/database.js: Database connection
+ * - middleware/userAuth.js: Authentication utilities
+ */
+
+const { Server } = require('socket.io');
+const pool = require('../config/database');
+
+class SocketService {
+  constructor() {
+    this.io = null;
+    this.connectedUsers = new Map(); // userId -> socket.id
+    this.socketUsers = new Map(); // socket.id -> userId
+  }
+
+  /**
+   * Initialize Socket.io server
+   * @param {Object} server - HTTP server instance
+   */
+  initializeSocket(server) {
+    this.io = new Server(server, {
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+      },
+      pingTimeout: 60000,
+      pingInterval: 25000
+    });
+
+    // Authentication middleware
+    this.io.use(this.authenticateSocket.bind(this));
+
+    // Handle connections
+    this.io.on('connection', this.handleConnection.bind(this));
+
+    console.log('✅ Socket.io server initialized');
+    return this.io;
+  }
+
+  /**
+   * Authenticate WebSocket connections
+   * @param {Object} socket - Socket.io socket object
+   * @param {Function} next - Next middleware function
+   */
+  async authenticateSocket(socket, next) {
+    try {
+      const token = socket.handshake.auth.token;
+      
+      if (!token) {
+        return next(new Error('Authentication token required'));
+      }
+
+      // Verify JWT token (assuming you have JWT auth)
+      // For now, we'll use a simple user_id from token
+      const userId = parseInt(token);
+      
+      if (!userId || isNaN(userId)) {
+        return next(new Error('Invalid authentication token'));
+      }
+
+      // Verify user exists in database
+      const [users] = await pool.execute(
+        'SELECT id, username, uuid FROM users WHERE id = ? AND status = 0',
+        [userId]
+      );
+
+      if (users.length === 0) {
+        return next(new Error('User not found or inactive'));
+      }
+
+      // Attach user info to socket
+      socket.userId = userId;
+      socket.userInfo = users[0];
+      next();
+    } catch (error) {
+      console.error('Socket authentication error:', error);
+      next(new Error('Authentication failed'));
+    }
+  }
+
+  /**
+   * Handle new WebSocket connection
+   * @param {Object} socket - Socket.io socket object
+   */
+  handleConnection(socket) {
+    const userId = socket.userId;
+    const userInfo = socket.userInfo;
+
+    console.log(`🔗 User ${userId} (${userInfo.username}) connected via WebSocket`);
+
+    // Track connected user
+    this.connectedUsers.set(userId, socket.id);
+    this.socketUsers.set(socket.id, userId);
+
+    // Join user's conversations
+    this.joinUserConversations(socket, userId);
+
+    // Handle events
+    socket.on('join_conversation', (data) => this.handleJoinConversation(socket, data));
+    socket.on('send_message', (data) => this.handleSendMessage(socket, data));
+    socket.on('typing_start', (data) => this.handleTypingIndicator(socket, data, true));
+    socket.on('typing_stop', (data) => this.handleTypingIndicator(socket, data, false));
+    socket.on('disconnect', () => this.handleDisconnect(socket));
+
+    // Send connection success
+    socket.emit('connected', {
+      message: 'Successfully connected to chat server',
+      user_id: userId,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  /**
+   * Join user's existing conversations
+   * @param {Object} socket - Socket.io socket object
+   * @param {number} userId - User ID
+   */
+  async joinUserConversations(socket, userId) {
+    try {
+      const [conversations] = await pool.execute(
+        'SELECT id FROM conversations WHERE user_id = ? AND status = "active"',
+        [userId]
+      );
+
+      conversations.forEach(conv => {
+        const roomName = `conversation_${conv.id}`;
+        socket.join(roomName);
+        console.log(`📍 User ${userId} joined conversation room ${roomName}`);
+      });
+    } catch (error) {
+      console.error('Error joining user conversations:', error);
+    }
+  }
+
+  /**
+   * Handle joining a conversation room
+   * @param {Object} socket - Socket.io socket object
+   * @param {Object} data - Event data
+   */
+  async handleJoinConversation(socket, data) {
+    try {
+      const { conversation_id } = data;
+      const userId = socket.userId;
+
+      if (!conversation_id) {
+        socket.emit('error', { message: 'conversation_id is required' });
+        return;
+      }
+
+      // Verify user has access to this conversation
+      const [conversations] = await pool.execute(
+        'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
+        [conversation_id, userId]
+      );
+
+      if (conversations.length === 0) {
+        socket.emit('error', { message: 'Access denied to conversation' });
+        return;
+      }
+
+      const roomName = `conversation_${conversation_id}`;
+      socket.join(roomName);
+
+      socket.emit('joined_conversation', {
+        conversation_id,
+        message: 'Successfully joined conversation'
+      });
+
+      console.log(`📍 User ${userId} joined conversation ${conversation_id}`);
+    } catch (error) {
+      console.error('Error joining conversation:', error);
+      socket.emit('error', { message: 'Failed to join conversation' });
+    }
+  }
+
+  /**
+   * Handle sending a real-time message
+   * @param {Object} socket - Socket.io socket object
+   * @param {Object} data - Message data
+   */
+  async handleSendMessage(socket, data) {
+    try {
+      const { conversation_id, message_type = 'text', content, file_id = null } = data;
+      const userId = socket.userId;
+      const userInfo = socket.userInfo;
+
+      if (!conversation_id || !content) {
+        socket.emit('error', { message: 'conversation_id and content are required' });
+        return;
+      }
+
+      // Verify user has access to this conversation
+      const [conversations] = await pool.execute(
+        'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
+        [conversation_id, userId]
+      );
+
+      if (conversations.length === 0) {
+        socket.emit('error', { message: 'Access denied to conversation' });
+        return;
+      }
+
+      // Insert message into database
+      const [result] = await pool.execute(
+        'INSERT INTO messages (conversation_id, user_id, sender_role, message_type, content, file_id) VALUES (?, ?, "user", ?, ?, ?)',
+        [conversation_id, userId, message_type, content, file_id]
+      );
+
+      // Construct message object
+      const messageData = {
+        id: result.insertId,
+        conversation_id,
+        sender_role: 'user',
+        message_type,
+        content,
+        file_id,
+        timestamp: new Date().toISOString(),
+        sender_identifier: userInfo.uuid
+      };
+
+      // Emit to conversation room
+      this.emitToConversation(conversation_id, 'new_message', messageData);
+
+      console.log(`💬 Message sent by user ${userId} in conversation ${conversation_id}`);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      socket.emit('error', { message: 'Failed to send message' });
+    }
+  }
+
+  /**
+   * Handle typing indicator
+   * @param {Object} socket - Socket.io socket object
+   * @param {Object} data - Typing data
+   * @param {boolean} typing - Typing status
+   */
+  async handleTypingIndicator(socket, data, typing) {
+    try {
+      const { conversation_id } = data;
+      const userId = socket.userId;
+      const userInfo = socket.userInfo;
+
+      if (!conversation_id) {
+        socket.emit('error', { message: 'conversation_id is required' });
+        return;
+      }
+
+      // Verify user has access to this conversation
+      const [conversations] = await pool.execute(
+        'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
+        [conversation_id, userId]
+      );
+
+      if (conversations.length === 0) {
+        socket.emit('error', { message: 'Access denied to conversation' });
+        return;
+      }
+
+      // Emit typing indicator to conversation room (exclude sender)
+      socket.to(`conversation_${conversation_id}`).emit('typing_indicator', {
+        conversation_id,
+        sender_role: 'user',
+        typing,
+        sender_identifier: userInfo.uuid
+      });
+
+      console.log(`⌨️  User ${userId} ${typing ? 'started' : 'stopped'} typing in conversation ${conversation_id}`);
+    } catch (error) {
+      console.error('Error handling typing indicator:', error);
+      socket.emit('error', { message: 'Failed to send typing indicator' });
+    }
+  }
+
+  /**
+   * Handle client disconnection
+   * @param {Object} socket - Socket.io socket object
+   */
+  handleDisconnect(socket) {
+    const userId = this.socketUsers.get(socket.id);
+    
+    if (userId) {
+      this.connectedUsers.delete(userId);
+      this.socketUsers.delete(socket.id);
+      console.log(`🔌 User ${userId} disconnected from WebSocket`);
+    }
+  }
+
+  /**
+   * Emit event to all users in a conversation
+   * @param {number} conversationId - Conversation ID
+   * @param {string} event - Event name
+   * @param {Object} data - Event data
+   */
+  emitToConversation(conversationId, event, data) {
+    if (this.io) {
+      this.io.to(`conversation_${conversationId}`).emit(event, data);
+    }
+  }
+
+  /**
+   * Emit event to a specific user
+   * @param {number} userId - User ID
+   * @param {string} event - Event name
+   * @param {Object} data - Event data
+   */
+  emitToUser(userId, event, data) {
+    if (this.io) {
+      const socketId = this.connectedUsers.get(userId);
+      if (socketId) {
+        this.io.to(socketId).emit(event, data);
+      }
+    }
+  }
+
+  /**
+   * Send admin message to conversation
+   * @param {number} conversationId - Conversation ID
+   * @param {number} adminId - Admin ID
+   * @param {string} content - Message content
+   * @param {string} messageType - Message type
+   */
+  async sendAdminMessage(conversationId, adminId, content, messageType = 'text') {
+    try {
+      // Insert message into database
+      const [result] = await pool.execute(
+        'INSERT INTO messages (conversation_id, admin_id, sender_role, message_type, content) VALUES (?, ?, "admin", ?, ?)',
+        [conversationId, adminId, messageType, content]
+      );
+
+      // Get admin info
+      const [admins] = await pool.execute(
+        'SELECT username FROM admins WHERE id = ?',
+        [adminId]
+      );
+
+      const adminUsername = admins[0]?.username || 'Admin';
+
+      // Construct message object
+      const messageData = {
+        id: result.insertId,
+        conversation_id: conversationId,
+        sender_role: 'admin',
+        message_type: messageType,
+        content,
+        timestamp: new Date().toISOString(),
+        sender_identifier: adminUsername
+      };
+
+      // Emit to conversation room
+      this.emitToConversation(conversationId, 'new_message', messageData);
+
+      console.log(`💬 Admin message sent by ${adminUsername} in conversation ${conversationId}`);
+      return messageData;
+    } catch (error) {
+      console.error('Error sending admin message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get online users count
+   * @returns {number} Number of connected users
+   */
+  getOnlineUsersCount() {
+    return this.connectedUsers.size;
+  }
+
+  /**
+   * Check if user is online
+   * @param {number} userId - User ID
+   * @returns {boolean} True if user is online
+   */
+  isUserOnline(userId) {
+    return this.connectedUsers.has(userId);
+  }
+}
+
+// Export singleton instance
+module.exports = new SocketService();

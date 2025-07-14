@@ -299,3 +299,71 @@ BEGIN
     WHERE id = OLD.reply_id;
 END$$
 DELIMITER ;
+
+-- ===================================================================
+-- IM (INSTANT MESSAGING) TABLES
+-- ===================================================================
+
+-- Conversations table for user-admin messaging
+CREATE TABLE IF NOT EXISTS conversations (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    admin_id INT UNSIGNED NULL COMMENT 'Assigned admin for this conversation',
+    status ENUM('active', 'closed', 'archived') DEFAULT 'active',
+    last_message_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    -- Performance indexes
+    INDEX idx_user_id (user_id),
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_status (status),
+    INDEX idx_last_message (last_message_at),
+    INDEX idx_created_at (created_at),
+    -- Foreign keys
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Messages table for storing chat messages
+CREATE TABLE IF NOT EXISTS messages (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    conversation_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NULL COMMENT 'User ID if sent by user',
+    admin_id INT UNSIGNED NULL COMMENT 'Admin ID if sent by admin',
+    sender_role ENUM('user', 'admin', 'system') NOT NULL,
+    message_type ENUM('text', 'image', 'file', 'system') DEFAULT 'text',
+    content TEXT NOT NULL,
+    file_id VARCHAR(255) NULL COMMENT 'Reference to uploaded file',
+    file_url VARCHAR(500) NULL COMMENT 'Direct URL to file',
+    metadata JSON NULL COMMENT 'Additional message metadata',
+    is_read BOOLEAN DEFAULT FALSE,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Performance indexes
+    INDEX idx_conversation (conversation_id),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_sender_user (sender_role, user_id),
+    INDEX idx_sender_admin (sender_role, admin_id),
+    INDEX idx_read (is_read),
+    INDEX idx_message_type (message_type),
+    -- Full-text search index
+    FULLTEXT idx_content (content),
+    -- Foreign keys
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ===================================================================
+-- IM DATABASE TRIGGERS
+-- ===================================================================
+
+-- Trigger to update last_message_at when new message is inserted
+DELIMITER $$
+CREATE TRIGGER IF NOT EXISTS conversation_update_last_message
+AFTER INSERT ON messages
+FOR EACH ROW
+BEGIN
+    UPDATE conversations 
+    SET last_message_at = NEW.timestamp,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.conversation_id;
+END$$
+DELIMITER ;

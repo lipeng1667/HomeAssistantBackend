@@ -40,10 +40,22 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 - 📩 Instant Messaging (IM)
 
-| Method | Endpoint             | Description                |Done|
-| ------ | -------------------- | -------------------------- |----|
-| GET    | `/api/chat/messages` | Fetch chat history         | ❌ |
-| POST   | `/api/chat/messages` | Send message to admin/user | ❌ |
+| Method | Endpoint                           | Description                               |Done|
+| ------ | ---------------------------------- | ----------------------------------------- |----|
+| GET    | `/api/chat/messages`               | Fetch chat history                        | ✅ |
+| POST   | `/api/chat/messages`               | Send message to admin/user                | ✅ |
+| GET    | `/api/chat/conversations`          | List user's conversations                 | 🔄 |
+| POST   | `/api/chat/conversations`          | Create new conversation                   | 🔄 |
+| PUT    | `/api/chat/conversations/:id/read` | Mark messages as read                     | 🔄 |
+| POST   | `/api/chat/conversations/:id/typing` | Send typing indicator                   | 🔄 |
+| POST   | `/api/chat/upload`                 | Upload file/image for messaging          | 🔄 |
+| GET    | `/api/chat/search`                 | Search messages in conversations          | 🔄 |
+
+**WebSocket Events (Real-time)**
+- `new_message` - New message received
+- `typing_indicator` - User typing status
+- `message_read` - Message read receipt
+- `conversation_status` - Conversation status change
 
 - 📊 Logs
 
