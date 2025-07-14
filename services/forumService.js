@@ -11,6 +11,7 @@
  * Modification Log:
  * - 2025-07-10: Initial implementation with complete forum functionality
  * - 2025-07-11: Added image retrieval integration with upload service
+ * - 2025-07-11: Implemented hierarchical reply sorting and removed parent_reply field
  * 
  * Functions:
  * - getTopics(filters): Get paginated topics with filtering and sorting
@@ -30,6 +31,7 @@
  * - saveDraft(draftData): Save or update draft
  * - deleteDraft(draftId, userId): Delete draft (owner only)
  * - fetchImagesByEntity(entityType, entityIds): Batch fetch images for entities
+ * - sortRepliesHierarchically(replies): Sort replies in hierarchical order
  * - buildTopicQuery(filters): Build SQL query for topic filtering
  * - buildReplyQuery(filters): Build SQL query for reply filtering
  * - buildSearchQuery(query, filters): Build SQL query for search
@@ -97,6 +99,76 @@ class ForumService {
       throw error;
     }
   }
+
+  /**
+   * @description Sort replies in hierarchical order for threaded display
+   * @function sortRepliesHierarchically
+   * @param {Array} replies - Flat array of reply objects
+   * @returns {Array} Hierarchically sorted array with parent -> children ordering
+   * @sideEffects None - pure function
+   */
+  sortRepliesHierarchically(replies) {
+    if (!replies || replies.length === 0) {
+      return [];
+    }
+
+    // Create maps for efficient lookup
+    const replyMap = new Map();
+    const childrenMap = new Map();
+    
+    // Index all replies by ID and group children by parent_reply_id
+    for (const reply of replies) {
+      replyMap.set(reply.id, reply);
+      
+      const parentId = reply.parent_reply_id;
+      if (parentId !== null && parentId !== undefined) {
+        if (!childrenMap.has(parentId)) {
+          childrenMap.set(parentId, []);
+        }
+        childrenMap.get(parentId).push(reply);
+      }
+    }
+    
+    // Sort children arrays by creation time for consistent ordering
+    for (const children of childrenMap.values()) {
+      children.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    }
+    
+    const result = [];
+    const visited = new Set();
+    
+    /**
+     * Depth-first traversal to build hierarchical order
+     * @param {Object} reply - Current reply to process
+     */
+    function addReplyWithChildren(reply) {
+      if (visited.has(reply.id)) {
+        return; // Prevent infinite loops in case of circular references
+      }
+      
+      visited.add(reply.id);
+      result.push(reply);
+      
+      // Add all children of this reply
+      const children = childrenMap.get(reply.id) || [];
+      for (const child of children) {
+        addReplyWithChildren(child);
+      }
+    }
+    
+    // Find all top-level replies (parent_reply_id is null) and sort by creation time
+    const topLevelReplies = replies
+      .filter(reply => reply.parent_reply_id === null || reply.parent_reply_id === undefined)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    
+    // Process each top-level reply and its descendants
+    for (const topReply of topLevelReplies) {
+      addReplyWithChildren(topReply);
+    }
+    
+    return result;
+  }
+
   /**
    * Get paginated topics with filtering and sorting
    * @async
@@ -142,20 +214,18 @@ class ForumService {
   }
 
   /**
-   * Get topic details with replies
+   * Get topic details with hierarchically sorted replies
    * @async
    * @function getTopicById
    * @param {number} topicId - Topic ID
-   * @param {Object} replyFilters - Reply pagination filters
-   * @param {number} replyFilters.reply_page - Reply page number
-   * @param {number} replyFilters.reply_limit - Replies per page
+   * @param {Object} replyFilters - Reply filters (pagination removed for hierarchical sorting)
    * @param {number} replyFilters.user_id - Include user's under-review replies and prioritize at top
-   * @returns {Promise<Object>} Topic with replies and pagination
+   * @returns {Promise<Object>} Topic with hierarchically sorted replies
    * @throws {Error} Database query errors or topic not found
    * @sideEffects None - read-only database operation
    */
   async getTopicById(topicId, replyFilters = {}) {
-    const { reply_page = 1, reply_limit = 20, user_id } = replyFilters;
+    const { user_id } = replyFilters;
     
     // Get topic details - include user's own under-review topics if user_id provided
     let topicQuery = `
@@ -195,49 +265,34 @@ class ForumService {
       whereClause += ' AND r.status = 0';
     }
     
-    // Build sort clause with user prioritization
-    let sortClause;
-    if (user_id) {
-      // Prioritize user's replies at top, then chronological order
-      sortClause = 'ORDER BY (r.user_id = ?) DESC, r.created_at ASC';
-      queryParams.push(user_id);
-    } else {
-      // Normal chronological sorting
-      sortClause = 'ORDER BY r.created_at ASC';
-    }
-    
-    // Get replies with pagination
-    const replyOffset = (reply_page - 1) * reply_limit;
+    // Get all replies for hierarchical sorting
     const [replies] = await pool.execute(`
       SELECT r.*, u.username as author_name, u.id as author_id
       FROM forum_replies r
       JOIN users u ON r.user_id = u.id
       ${whereClause}
-      ${sortClause}
-      LIMIT ? OFFSET ?
-    `, [...queryParams, reply_limit, replyOffset]);
-    
-    // Get total reply count with same WHERE clause
-    const countParams = user_id ? [topicId, user_id] : [topicId];
-    const [replyCount] = await pool.execute(`
-      SELECT COUNT(*) as total FROM forum_replies r
-      ${whereClause}
-    `, countParams);
+      ORDER BY r.created_at ASC
+    `, queryParams);
     
     // Fetch images for topic and replies
     const topicImages = await this.fetchImagesByEntity('topic', [topicId]);
     const replyIds = replies.map(reply => reply.id);
     const imagesByReply = await this.fetchImagesByEntity('reply', replyIds);
     
-    // Format responses
-    const topic = this.formatTopicResponse(topics[0], topicImages[topicId] || []);
+    // Format and sort replies hierarchically
     const formattedReplies = replies.map(reply => this.formatReplyResponse(reply, imagesByReply[reply.id] || []));
-    const replyPagination = this.buildPagination(reply_page, reply_limit, replyCount[0].total);
+    const hierarchicalReplies = this.sortRepliesHierarchically(formattedReplies);
+    
+    // Use hierarchical ordering (user prioritization would break parent-child relationships)
+    const finalReplies = hierarchicalReplies;
+    
+    // Format topic response
+    const topic = this.formatTopicResponse(topics[0], topicImages[topicId] || []);
     
     return {
       topic,
-      replies: formattedReplies,
-      reply_pagination: replyPagination
+      replies: finalReplies,
+      total_replies: replies.length
     };
   }
 
@@ -284,11 +339,13 @@ class ForumService {
       // Handle image uploads if provided
       if (images.length > 0) {
         for (const imageUrl of images) {
+          // Convert full URL back to database format
+          const dbImageUrl = imageUrl.replace('http://47.94.108.189', '/uploads');
           await connection.execute(`
             UPDATE forum_uploads 
             SET entity_type = 'topic', entity_id = ?, status = 1
             WHERE file_url = ? AND user_id = ?
-          `, [topicId, imageUrl, user_id]);
+          `, [topicId, dbImageUrl, user_id]);
         }
       }
       
@@ -381,20 +438,22 @@ class ForumService {
       
       // Handle image updates if provided
       if (images !== undefined) {
-        // Clear existing images
+        // Clear existing images by marking as deleted
         await connection.execute(`
           UPDATE forum_uploads 
-          SET entity_type = NULL, entity_id = NULL, status = 3
+          SET status = 3
           WHERE entity_type = 'topic' AND entity_id = ?
         `, [topicId]);
         
         // Add new images
         for (const imageUrl of images) {
+          // Convert full URL back to database format
+          const dbImageUrl = imageUrl.replace('http://47.94.108.189', '/uploads');
           await connection.execute(`
             UPDATE forum_uploads 
             SET entity_type = 'topic', entity_id = ?, status = 1
             WHERE file_url = ? AND user_id = ?
-          `, [topicId, imageUrl, userId]);
+          `, [topicId, dbImageUrl, userId]);
         }
       }
       
@@ -496,20 +555,11 @@ class ForumService {
       else sortClause = 'ORDER BY r.created_at ASC';
     }
     
-    // Get replies with parent reply information
+    // Get replies with simplified query
     const [replies] = await pool.execute(`
-      SELECT 
-        r.*, 
-        u.username as author_name, 
-        u.id as author_id,
-        pr.id as parent_reply_id,
-        pr.content as parent_content,
-        pu.username as parent_author_name,
-        pu.id as parent_author_id
+      SELECT r.*, u.username as author_name, u.id as author_id
       FROM forum_replies r
       JOIN users u ON r.user_id = u.id
-      LEFT JOIN forum_replies pr ON r.parent_reply_id = pr.id
-      LEFT JOIN users pu ON pr.user_id = pu.id
       ${whereClause}
       ${sortClause}
       LIMIT ? OFFSET ?
@@ -595,11 +645,13 @@ class ForumService {
       // Handle image uploads if provided
       if (images.length > 0) {
         for (const imageUrl of images) {
+          // Convert full URL back to database format
+          const dbImageUrl = imageUrl.replace('http://47.94.108.189', '/uploads');
           await connection.execute(`
             UPDATE forum_uploads 
             SET entity_type = 'reply', entity_id = ?, status = 1
             WHERE file_url = ? AND user_id = ?
-          `, [replyId, imageUrl, user_id]);
+          `, [replyId, dbImageUrl, user_id]);
         }
       }
       
@@ -661,20 +713,22 @@ class ForumService {
       
       // Handle image updates if provided
       if (images !== undefined) {
-        // Clear existing images
+        // Clear existing images by marking as deleted
         await connection.execute(`
           UPDATE forum_uploads 
-          SET entity_type = NULL, entity_id = NULL, status = 3
+          SET status = 3
           WHERE entity_type = 'reply' AND entity_id = ?
         `, [replyId]);
         
         // Add new images
         for (const imageUrl of images) {
+          // Convert full URL back to database format
+          const dbImageUrl = imageUrl.replace('http://47.94.108.189', '/uploads');
           await connection.execute(`
             UPDATE forum_uploads 
             SET entity_type = 'reply', entity_id = ?, status = 1
             WHERE file_url = ? AND user_id = ?
-          `, [replyId, imageUrl, userId]);
+          `, [replyId, dbImageUrl, userId]);
         }
       }
       
@@ -1215,15 +1269,15 @@ class ForumService {
   }
 
   /**
-   * Format reply object for API response with nested reply support
+   * Format reply object for API response with hierarchical support
    * @function formatReplyResponse
    * @param {Object} reply - Raw reply data from database
    * @param {Array} images - Array of image objects for this reply
-   * @returns {Object} Formatted reply object with parent reply info
+   * @returns {Object} Formatted reply object
    * @sideEffects None - pure function
    */
   formatReplyResponse(reply, images = []) {
-    const formattedReply = {
+    return {
       id: reply.id,
       content: reply.content,
       author: {
@@ -1231,7 +1285,6 @@ class ForumService {
         name: reply.author_name
       },
       parent_reply_id: reply.parent_reply_id,
-      parent_reply: null,
       like_count: reply.like_count,
       is_liked: false, // TODO: Implement user-specific like status
       status: reply.status,
@@ -1239,22 +1292,6 @@ class ForumService {
       created_at: reply.created_at,
       updated_at: reply.updated_at
     };
-
-    // Include parent reply information if this is a nested reply
-    if (reply.parent_reply_id && reply.parent_content) {
-      formattedReply.parent_reply = {
-        id: reply.parent_reply_id,
-        content: reply.parent_content.length > 100 
-          ? reply.parent_content.substring(0, 100) + '...' 
-          : reply.parent_content,
-        author: {
-          id: reply.parent_author_id,
-          name: reply.parent_author_name
-        }
-      };
-    }
-
-    return formattedReply;
   }
 
   /**
