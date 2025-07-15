@@ -860,4 +860,169 @@ router.post('/upload', authenticateUser, upload.single('file'), async (req, res)
   }
 });
 
+/**
+ * @description Send admin message to conversation (saves to DB and sends via WebSocket)
+ * @async
+ * @function sendAdminMessage
+ * @route POST /api/chat/admin-message
+ * 
+ * @param {Object} req.body
+ * @param {number} req.body.conversation_id - Conversation ID
+ * @param {number} req.body.admin_id - Admin ID (default: 1)
+ * @param {string} req.body.content - Message content
+ * @param {string} req.body.message_type - Message type (default: 'text')
+ * 
+ * @returns {Object} Response object
+ * @returns {string} Response.status - Success/error status
+ * @returns {Object} Response.data - Created message data
+ */
+router.post('/admin-message', async (req, res) => {
+  try {
+    const { conversation_id, admin_id = 1, content, message_type = 'text' } = req.body;
+
+    if (!conversation_id || !content) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'conversation_id and content are required'
+      });
+    }
+
+    // Check if WebSocket service is available
+    if (!global.socketService) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'WebSocket service not available'
+      });
+    }
+
+    // Verify conversation exists
+    const [conversations] = await pool.execute(
+      'SELECT * FROM conversations WHERE id = ?',
+      [conversation_id]
+    );
+
+    if (conversations.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Conversation not found'
+      });
+    }
+
+    // Send admin message (saves to DB and emits WebSocket event)
+    const messageData = await global.socketService.sendAdminMessage(
+      parseInt(conversation_id),
+      parseInt(admin_id),
+      content,
+      message_type
+    );
+
+    res.status(201).json({
+      status: 'success',
+      data: messageData,
+      message: `Admin message sent to conversation ${conversation_id}`
+    });
+  } catch (error) {
+    console.error('Error sending admin message:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * @description Test endpoint to simulate WebSocket messages (admin only)
+ * @async
+ * @function testWebSocketMessage
+ * @route POST /api/chat/test-websocket
+ * 
+ * @param {Object} req.body
+ * @param {number} req.body.user_id - Target user ID
+ * @param {number} req.body.conversation_id - Conversation ID
+ * @param {string} req.body.message - Message content
+ * @param {string} req.body.event - Event type (new_message, typing_indicator, etc.)
+ * 
+ * @returns {Object} Response object
+ * @returns {string} Response.status - Success/error status
+ * @returns {string} Response.message - Result message
+ */
+router.post('/test-websocket', async (req, res) => {
+  try {
+    const { user_id, conversation_id, message, event = 'new_message' } = req.body;
+
+    if (!user_id || !conversation_id || !message) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'user_id, conversation_id, and message are required'
+      });
+    }
+
+    // Check if WebSocket service is available
+    if (!global.socketService) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'WebSocket service not available'
+      });
+    }
+
+    // Simulate different types of WebSocket events
+    let eventData;
+    
+    switch (event) {
+      case 'new_message':
+        eventData = {
+          id: Date.now(),
+          conversation_id: parseInt(conversation_id),
+          sender_role: 'admin',
+          message_type: 'text',
+          content: message,
+          timestamp: new Date().toISOString(),
+          sender_identifier: 'admin_test'
+        };
+        break;
+        
+      case 'typing_indicator':
+        eventData = {
+          conversation_id: parseInt(conversation_id),
+          sender_role: 'admin',
+          typing: true,
+          sender_identifier: 'admin_test'
+        };
+        break;
+        
+      case 'connected':
+        eventData = {
+          message: 'Test connection message',
+          user_id: parseInt(user_id),
+          timestamp: new Date().toISOString()
+        };
+        break;
+        
+      default:
+        eventData = {
+          message: message,
+          timestamp: new Date().toISOString()
+        };
+    }
+
+    // Send to specific user
+    global.socketService.emitToUser(parseInt(user_id), event, eventData);
+    
+    // Also send to conversation room
+    global.socketService.emitToConversation(parseInt(conversation_id), event, eventData);
+
+    res.json({
+      status: 'success',
+      message: `WebSocket ${event} sent to user ${user_id} in conversation ${conversation_id}`,
+      data: eventData
+    });
+  } catch (error) {
+    console.error('Error testing WebSocket:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
 module.exports = router; 

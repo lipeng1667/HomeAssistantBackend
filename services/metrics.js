@@ -145,25 +145,37 @@ class MetricsService {
         }
       }
 
-      // Get connection and speed metrics
-      const [currentConnections, maxConnections, acceptedRequests, currentSpeed, maxSpeed] = await Promise.all([
+      // Get connection and speed metrics (including WebSocket)
+      const [currentConnections, maxConnections, acceptedRequests, currentSpeed, maxSpeed, wsConnections, wsMaxConnections, wsMessages] = await Promise.all([
         client.get(redisClient.key('connections:http:current')),
         client.get(redisClient.key('connections:http:max_since_startup')),
         client.get(redisClient.key('requests:accepted')),
         client.get(redisClient.key('requests:speed_per_second')),
-        client.get(redisClient.key('requests:max_speed_per_second'))
+        client.get(redisClient.key('requests:max_speed_per_second')),
+        client.get(redisClient.key('connections:websocket:current')),
+        client.get(redisClient.key('connections:websocket:max_since_startup')),
+        client.get(redisClient.key('websocket:messages:total'))
       ])
 
       return {
         connections: {
-          current: parseInt(currentConnections) || 0,
-          maxSinceStartup: parseInt(maxConnections) || 0
+          http: {
+            current: parseInt(currentConnections) || 0,
+            maxSinceStartup: parseInt(maxConnections) || 0
+          },
+          websocket: {
+            current: parseInt(wsConnections) || 0,
+            maxSinceStartup: parseInt(wsMaxConnections) || 0
+          }
         },
         total: {
           requests: parseInt(totalRequests),
           accepted: parseInt(acceptedRequests) || 0,
           errors: parseInt(totalErrors),
           errorRate: totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : '0.00'
+        },
+        websocket: {
+          messages: parseInt(wsMessages) || 0
         },
         speed: {
           current: parseFloat(currentSpeed) || 0,
@@ -334,6 +346,86 @@ class MetricsService {
       }
     } catch (error) {
       console.error('Error resetting metrics:', error)
+    }
+  }
+  /**
+   * Increment WebSocket connection counter
+   * @returns {Promise<void>} Promise resolving when WebSocket counters are updated
+   * @sideEffects Updates Redis WebSocket connection counters
+   * @throws Does not throw - logs errors and continues gracefully
+   */
+  async incrementWebSocketConnections() {
+    if (!redisClient.isReady()) {
+      console.warn('Redis not ready, cannot increment WebSocket connections')
+      return
+    }
+
+    const client = redisClient.getClient()
+
+    try {
+      // Increment current connections and get the new value
+      const newCount = await client.incr(redisClient.key('connections:websocket:current'))
+      
+      // Update max connections if this is higher
+      const maxKey = redisClient.key('connections:websocket:max_since_startup')
+      const currentMax = await client.get(maxKey) || 0
+      
+      if (newCount > parseInt(currentMax)) {
+        await client.set(maxKey, newCount)
+      }
+      
+      console.log(`📊 WebSocket connections: ${newCount} (max: ${Math.max(newCount, parseInt(currentMax))})`)
+    } catch (error) {
+      console.error('Error incrementing WebSocket connections:', error)
+    }
+  }
+
+  /**
+   * Decrement WebSocket connection counter
+   * @returns {Promise<void>} Promise resolving when WebSocket counters are updated
+   * @sideEffects Updates Redis WebSocket connection counters
+   * @throws Does not throw - logs errors and continues gracefully
+   */
+  async decrementWebSocketConnections() {
+    if (!redisClient.isReady()) return
+
+    const client = redisClient.getClient()
+
+    try {
+      // Decrement current connections (don't go below 0)
+      const current = await client.get(redisClient.key('connections:websocket:current')) || 0
+      if (parseInt(current) > 0) {
+        await client.decrBy(redisClient.key('connections:websocket:current'), 1)
+      }
+    } catch (error) {
+      console.error('Error decrementing WebSocket connections:', error)
+    }
+  }
+
+  /**
+   * Increment WebSocket message counter
+   * @param {string} type - Message type (user_message, admin_message, typing, etc.)
+   * @returns {Promise<void>} Promise resolving when message counters are updated
+   * @sideEffects Updates Redis WebSocket message counters
+   * @throws Does not throw - logs errors and continues gracefully
+   */
+  async incrementWebSocketMessages(type = 'message') {
+    if (!redisClient.isReady()) return
+
+    const client = redisClient.getClient()
+
+    try {
+      const multi = client.multi()
+      
+      // Total WebSocket messages
+      multi.incrBy(redisClient.key('websocket:messages:total'), 1)
+      
+      // Per-type messages
+      multi.incrBy(redisClient.key(`websocket:messages:${type}`), 1)
+      
+      await multi.exec()
+    } catch (error) {
+      console.error('Error incrementing WebSocket message metrics:', error)
     }
   }
 }

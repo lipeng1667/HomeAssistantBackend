@@ -209,27 +209,31 @@ function displayWebServiceTable(stats) {
   const connections = data.connections || {};
   const speed = data.speed || {};
   const total = data.total || {};
+  const websocket = data.websocket || {};
 
   // Format numbers for table display
-  const connCurr = String(connections.current || 0).padStart(6);
-  const connMax = String(connections.maxSinceStartup || 0).padStart(6);
+  const httpConnCurr = String(connections.http?.current || 0).padStart(4);
+  const httpConnMax = String(connections.http?.maxSinceStartup || 0).padStart(5);
+  const wsConnCurr = String(connections.websocket?.current || 0).padStart(5);
+  const wsConnMax = String(connections.websocket?.maxSinceStartup || 0).padStart(6);
   const speedCurr = String((speed.current || 0).toFixed(1)).padStart(6);
   const speedMax = String((speed.maxSinceStartup || 0).toFixed(1)).padStart(6);
   const requests = String(total.requests || 0).padStart(11);
   const accepted = String(total.accepted || 0).padStart(11);
-  const errors = String(total.errors || 0).padStart(11);
+  const wsMessages = String(websocket.messages || 0).padStart(7);
 
   const table = [
-    chalk.gray('+---------------------------------------------------------------+'),
-    chalk.gray('|') + chalk.bold.cyan('                          webservice                           ') + chalk.gray('|'),
-    chalk.gray('+---[ONLINE]--+---[SPEED]---+-----------+-----------+-----------+'),
-    chalk.gray('|') + chalk.white('  curr|   max|  curr|   max|    request|   accepted|      error') + chalk.gray('|'),
-    chalk.gray('+------+------+------+------+-----------+-----------+-----------+'),
-    chalk.gray('|') + chalk.cyan(connCurr) + chalk.gray('|') + chalk.yellow(connMax) + chalk.gray('|') +
+    chalk.gray('+---------------------------------------------------------------------+'),
+    chalk.gray('|') + chalk.bold.cyan('                           webservice                                ') + chalk.gray('|'),
+    chalk.gray('+--[HTTP]--+----[WS]----+---[SPEED]---+-----------+-----------+-------+'),
+    chalk.gray('|') + chalk.white('curr|  max|  curr|  max|  curr|   max|    request|   accepted|   msgs') + chalk.gray('|'),
+    chalk.gray('+----+-----+-----+------+------+------+-----------+-----------+-------+'),
+    chalk.gray('|') + chalk.cyan(httpConnCurr) + chalk.gray('|') + chalk.yellow(httpConnMax) + chalk.gray('|') +
+    chalk.cyan(wsConnCurr) + chalk.gray('|') + chalk.yellow(wsConnMax) + chalk.gray('|') +
     chalk.cyan(speedCurr) + chalk.gray('|') + chalk.yellow(speedMax) + chalk.gray('|') +
     chalk.cyan(requests) + chalk.gray('|') + chalk.green(accepted) + chalk.gray('|') +
-    chalk.red(errors) + chalk.gray('|'),
-    chalk.gray('+------+------+------+------+-----------+-----------+-----------+')
+    chalk.magenta(wsMessages) + chalk.gray('|'),
+    chalk.gray('+----+-----+-----+------+------+------+-----------+-----------+-------+'),
   ];
 
   console.log('\n' + table.join('\n') + '\n');

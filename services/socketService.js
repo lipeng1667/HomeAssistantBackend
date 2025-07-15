@@ -115,6 +115,14 @@ class SocketService {
     this.connectedUsers.set(userId, socket.id);
     this.socketUsers.set(socket.id, userId);
 
+    // Update WebSocket metrics
+    if (global.metricsService) {
+      console.log('📊 Incrementing WebSocket connection metrics...');
+      global.metricsService.incrementWebSocketConnections().catch(console.error);
+    } else {
+      console.warn('⚠️ global.metricsService not available for WebSocket metrics');
+    }
+
     // Join user's conversations
     this.joinUserConversations(socket, userId);
 
@@ -244,6 +252,11 @@ class SocketService {
       // Emit to conversation room
       this.emitToConversation(conversation_id, 'new_message', messageData);
 
+      // Update WebSocket message metrics
+      if (global.metricsService) {
+        global.metricsService.incrementWebSocketMessages('user_message').catch(console.error);
+      }
+
       console.log(`💬 Message sent by user ${userId} in conversation ${conversation_id}`);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -305,6 +318,14 @@ class SocketService {
       this.connectedUsers.delete(userId);
       this.socketUsers.delete(socket.id);
       console.log(`🔌 User ${userId} disconnected from WebSocket`);
+      
+      // Update WebSocket metrics
+      if (global.metricsService) {
+        console.log('📊 Decrementing WebSocket connection metrics...');
+        global.metricsService.decrementWebSocketConnections().catch(console.error);
+      } else {
+        console.warn('⚠️ global.metricsService not available for WebSocket metrics');
+      }
     }
   }
 

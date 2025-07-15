@@ -198,3 +198,60 @@ echo "Note: For upload test, replace '/path/to/test-image.jpg' with actual file 
 echo "Example: Create a test file first:"
 echo "echo 'test content' > test-file.txt"
 echo "Then use: -F \"file=@test-file.txt\""
+
+
+# =================================================================
+# CHAT ENDPOINTS
+# =================================================================
+
+# /api/chat/messages - GET (Get chat history)
+echo ""
+echo "For /api/chat/messages (GET - Get chat history)"
+echo "curl -X GET \"http://47.94.108.189:10000/api/chat/messages?user_id=53&page=1&limit=50\" \
+  -H \"X-Timestamp: $TIMESTAMP\" \
+  -H \"X-Signature: $SIGNATURE\""
+
+# /api/chat/messages - POST (Send message)
+echo ""
+echo "For /api/chat/messages (POST - Send message)"
+echo "curl -X POST \"http://47.94.108.189:10000/api/chat/messages\" \
+  -H \"Content-Type: application/json\" \
+  -H \"X-Timestamp: $TIMESTAMP\" \
+  -H \"X-Signature: $SIGNATURE\" \
+  -d '{\"user_id\": 53, \"message\": \"Hello from test script!\"}'"
+
+# /api/chat/test-websocket - POST (Test WebSocket simulation)
+echo ""
+echo "For /api/chat/test-websocket (POST - Test WebSocket)"
+echo "curl -X POST \"http://47.94.108.189:10000/api/chat/test-websocket\" \
+  -H \"Content-Type: application/json\" \
+  -H \"X-Timestamp: $TIMESTAMP\" \
+  -H \"X-Signature: $SIGNATURE\" \
+  -d '{\"user_id\": 53, \"conversation_id\": 1, \"message\": \"Test WebSocket message from server!\", \"event\": \"new_message\"}'"
+
+# /api/chat/test-websocket - POST (Test typing indicator)
+echo ""
+echo "For /api/chat/test-websocket (POST - Test typing indicator)"
+echo "curl -X POST \"http://47.94.108.189:10000/api/chat/test-websocket\" \
+  -H \"Content-Type: application/json\" \
+  -H \"X-Timestamp: $TIMESTAMP\" \
+  -H \"X-Signature: $SIGNATURE\" \
+  -d '{\"user_id\": 53, \"conversation_id\": 1, \"message\": \"typing...\", \"event\": \"typing_indicator\"}'"
+
+# /api/chat/admin-message - POST (Send admin message - saves to DB and sends WebSocket)
+echo ""
+echo "For /api/chat/admin-message (POST - Send admin message)"
+echo "curl -X POST \"http://47.94.108.189:10000/api/chat/admin-message\" \
+  -H \"Content-Type: application/json\" \
+  -H \"X-Timestamp: $TIMESTAMP\" \
+  -H \"X-Signature: $SIGNATURE\" \
+  -d '{\"conversation_id\": 1, \"admin_id\": 1, \"content\": \"Hello! This is an admin message. How can I help you today?\", \"message_type\": \"text\"}'"
+
+# /api/chat/test-websocket - POST (Test admin message - WebSocket only)
+echo ""
+echo "For /api/chat/test-websocket (POST - Test admin message - WebSocket only)"
+echo "curl -X POST \"http://47.94.108.189:10000/api/chat/test-websocket\" \
+  -H \"Content-Type: application/json\" \
+  -H \"X-Timestamp: $TIMESTAMP\" \
+  -H \"X-Signature: $SIGNATURE\" \
+  -d '{\"user_id\": 53, \"conversation_id\": 1, \"message\": \"Hello! This is a test WebSocket message from the server. How can I help you today?\", \"event\": \"new_message\"}'"
