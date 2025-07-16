@@ -317,9 +317,11 @@ const server = app.listen(config.server.port, config.server.host, () => {
   console.log(`🔗 Health check: http://${config.server.host}:${config.server.port}/health`)
 })
 
-// Initialize Socket.io for real-time messaging
-socketService.initializeSocket(server)
-global.socketService = socketService
+// Initialize Socket.io for real-time messaging (delay for Redis connection)
+setTimeout(() => {
+  socketService.initializeSocket(server)
+  global.socketService = socketService
+}, 2000) // Wait 2 seconds for Redis to connect
 
 // Track active HTTP connections with Redis cluster-wide aggregation
 server.on('connection', (socket) => {

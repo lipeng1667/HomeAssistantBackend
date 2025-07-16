@@ -15,8 +15,8 @@ module.exports = {
     {
       name: 'home-assistant-backend',
       script: 'server.js',
-      instances: 'max', // Use all available CPU cores
-      exec_mode: 'cluster',
+      instances: 1, // Single instance for WebSocket stability
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'development'
       },

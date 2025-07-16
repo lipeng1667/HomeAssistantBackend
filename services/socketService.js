@@ -27,6 +27,7 @@
  */
 
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const pool = require('../config/database');
 
 class SocketService {
@@ -50,11 +51,43 @@ class SocketService {
       pingInterval: 25000
     });
 
+    // Configure Redis adapter for PM2 clustering
+    const redisClient = require('../config/redis');
+    try {
+      if (redisClient.isReady()) {
+        const pubClient = redisClient.getClient();
+        const subClient = pubClient.duplicate();
+        
+        this.io.adapter(createAdapter(pubClient, subClient));
+        console.log('✅ Socket.io Redis adapter configured for PM2 clustering');
+      } else {
+        console.warn('⚠️ Redis not ready, Socket.io clustering disabled');
+        console.warn('⚠️ This may cause "Session ID unknown" errors with PM2 clustering');
+      }
+    } catch (error) {
+      console.error('❌ Failed to configure Redis adapter:', error);
+      console.warn('⚠️ Running Socket.io without clustering - may cause connection issues');
+    }
+
     // Authentication middleware
     this.io.use(this.authenticateSocket.bind(this));
 
     // Handle connections
     this.io.on('connection', this.handleConnection.bind(this));
+
+    // Handle connection errors
+    this.io.on('connect_error', (error) => {
+      console.error('❌ Socket.io connection error:', error);
+    });
+
+    // Log raw connection attempts (reduced logging for clustering)
+    this.io.engine.on('connection', (rawSocket) => {
+      console.log('🔍 Raw WebSocket connection attempt from:', rawSocket.remoteAddress);
+    });
+
+    this.io.engine.on('connection_error', (error) => {
+      console.error('❌ Raw WebSocket connection error:', error);
+    });
 
     console.log('✅ Socket.io server initialized');
     return this.io;
@@ -67,9 +100,15 @@ class SocketService {
    */
   async authenticateSocket(socket, next) {
     try {
-      const token = socket.handshake.auth.token;
+      console.log('🔍 WebSocket authentication attempt from:', socket.handshake.address);
+      console.log('🔍 Auth data:', socket.handshake.auth);
+      console.log('🔍 Query params:', socket.handshake.query);
+      
+      // Try auth first, then query params as fallback
+      const token = socket.handshake.auth.token || socket.handshake.query.token;
       
       if (!token) {
+        console.log('❌ Authentication failed: No token provided in auth or query params');
         return next(new Error('Authentication token required'));
       }
 
@@ -78,8 +117,11 @@ class SocketService {
       const userId = parseInt(token);
       
       if (!userId || isNaN(userId)) {
+        console.log('❌ Authentication failed: Invalid token format:', token);
         return next(new Error('Invalid authentication token'));
       }
+
+      console.log('🔍 Checking user ID:', userId);
 
       // Verify user exists in database
       const [users] = await pool.execute(
@@ -88,15 +130,18 @@ class SocketService {
       );
 
       if (users.length === 0) {
+        console.log('❌ Authentication failed: User not found or inactive for ID:', userId);
         return next(new Error('User not found or inactive'));
       }
+
+      console.log('✅ Authentication successful for user:', users[0].username);
 
       // Attach user info to socket
       socket.userId = userId;
       socket.userInfo = users[0];
       next();
     } catch (error) {
-      console.error('Socket authentication error:', error);
+      console.error('❌ Socket authentication error:', error);
       next(new Error('Authentication failed'));
     }
   }
