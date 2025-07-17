@@ -101,7 +101,7 @@ router.get('/messages', async (req, res) => {
             FROM messages m
             LEFT JOIN users u ON m.sender_role = 'user' AND m.user_id = u.id
             WHERE m.conversation_id = ?
-            ORDER BY m.timestamp 
+            ORDER BY m.timestamp DESC
             LIMIT ? OFFSET ?
         `, [conversationId, limit, offset]);
 
@@ -967,7 +967,7 @@ router.post('/test-websocket', async (req, res) => {
 
     // Simulate different types of WebSocket events
     let eventData;
-    
+
     switch (event) {
       case 'new_message':
         eventData = {
@@ -980,7 +980,7 @@ router.post('/test-websocket', async (req, res) => {
           sender_identifier: 'admin_test'
         };
         break;
-        
+
       case 'typing_indicator':
         eventData = {
           conversation_id: parseInt(conversation_id),
@@ -989,7 +989,7 @@ router.post('/test-websocket', async (req, res) => {
           sender_identifier: 'admin_test'
         };
         break;
-        
+
       case 'connected':
         eventData = {
           message: 'Test connection message',
@@ -997,7 +997,7 @@ router.post('/test-websocket', async (req, res) => {
           timestamp: new Date().toISOString()
         };
         break;
-        
+
       default:
         eventData = {
           message: message,
@@ -1007,7 +1007,7 @@ router.post('/test-websocket', async (req, res) => {
 
     // Send to specific user
     global.socketService.emitToUser(parseInt(user_id), event, eventData);
-    
+
     // Also send to conversation room
     global.socketService.emitToConversation(parseInt(conversation_id), event, eventData);
 

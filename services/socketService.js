@@ -57,7 +57,7 @@ class SocketService {
       if (redisClient.isReady()) {
         const pubClient = redisClient.getClient();
         const subClient = pubClient.duplicate();
-        
+
         this.io.adapter(createAdapter(pubClient, subClient));
         console.log('✅ Socket.io Redis adapter configured for PM2 clustering');
       } else {
@@ -103,10 +103,10 @@ class SocketService {
       console.log('🔍 WebSocket authentication attempt from:', socket.handshake.address);
       console.log('🔍 Auth data:', socket.handshake.auth);
       console.log('🔍 Query params:', socket.handshake.query);
-      
+
       // Try auth first, then query params as fallback
       const token = socket.handshake.auth.token || socket.handshake.query.token;
-      
+
       if (!token) {
         console.log('❌ Authentication failed: No token provided in auth or query params');
         return next(new Error('Authentication token required'));
@@ -115,7 +115,7 @@ class SocketService {
       // Verify JWT token (assuming you have JWT auth)
       // For now, we'll use a simple user_id from token
       const userId = parseInt(token);
-      
+
       if (!userId || isNaN(userId)) {
         console.log('❌ Authentication failed: Invalid token format:', token);
         return next(new Error('Invalid authentication token'));
@@ -358,12 +358,12 @@ class SocketService {
    */
   handleDisconnect(socket) {
     const userId = this.socketUsers.get(socket.id);
-    
+
     if (userId) {
       this.connectedUsers.delete(userId);
       this.socketUsers.delete(socket.id);
       console.log(`🔌 User ${userId} disconnected from WebSocket`);
-      
+
       // Update WebSocket metrics
       if (global.metricsService) {
         console.log('📊 Decrementing WebSocket connection metrics...');
@@ -416,14 +416,6 @@ class SocketService {
         [conversationId, adminId, messageType, content]
       );
 
-      // Get admin info
-      const [admins] = await pool.execute(
-        'SELECT username FROM admins WHERE id = ?',
-        [adminId]
-      );
-
-      const adminUsername = admins[0]?.username || 'Admin';
-
       // Construct message object
       const messageData = {
         id: result.insertId,
@@ -432,13 +424,13 @@ class SocketService {
         message_type: messageType,
         content,
         timestamp: new Date().toISOString(),
-        sender_identifier: adminUsername
+        sender_identifier: "admin"
       };
 
       // Emit to conversation room
       this.emitToConversation(conversationId, 'new_message', messageData);
 
-      console.log(`💬 Admin message sent by ${adminUsername} in conversation ${conversationId}`);
+      console.log(`💬 Admin message sent by admin in conversation ${conversationId}`);
       return messageData;
     } catch (error) {
       console.error('Error sending admin message:', error);
