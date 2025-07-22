@@ -440,7 +440,7 @@ class AuthService {
   async userLogin(phoneNumber, password, timestamp, clientIP) {
     // Find user by phone number
     const [users] = await pool.execute(
-      'SELECT id, device_id, password FROM users WHERE phone_number = ? AND status = 0',
+      'SELECT id, device_id, password, username FROM users WHERE phone_number = ? AND status = 0',
       [phoneNumber]
     );
 
@@ -465,6 +465,7 @@ class AuthService {
 
     return {
       userId: user.id,
+      userName: user.username,
       sessionCreated
     };
   }

@@ -143,7 +143,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    
+
     if (error.message === 'Phone number already registered') {
       return res.status(400).json({
         status: 'error',
@@ -219,13 +219,14 @@ router.post('/login', async (req, res) => {
       status: 'success',
       data: {
         user: {
-          id: result.userId
+          id: result.userId,
+          name: result.userName
         }
       }
     });
   } catch (error) {
     console.error('Login error:', error);
-    
+
     if (error.message === 'User not found' || error.message === 'Invalid password') {
       return res.status(403).json({
         status: 'error',

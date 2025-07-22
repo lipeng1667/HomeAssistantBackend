@@ -168,6 +168,7 @@ curl -X POST http://localhost:10000/api/auth/login \
 | `data` | Object | Response data container |
 | `data.user` | Object | User information object |
 | `data.user.id` | Integer | User's unique database ID |
+| `data.user.name` | String | User's name |
 
 **Response Error Codes:**
 
@@ -186,7 +187,8 @@ curl -X POST http://localhost:10000/api/auth/login \
   "status": "success",
   "data": {
     "user": {
-      "id": 1
+      "id": 1,
+      "name" : "Test"
     }
   }
 }
