@@ -59,7 +59,7 @@ class AuthService {
    */
   async findUserByDeviceId(deviceId) {
     const [existingUsers] = await pool.execute(
-      'SELECT * FROM users WHERE device_id = ? AND status = 0',
+      'SELECT * FROM users WHERE device_id = ? AND status >= 0',
       [deviceId]
     );
 
@@ -364,7 +364,7 @@ class AuthService {
 
     // Check if phone number already exists
     const [existingPhone] = await pool.execute(
-      'SELECT id FROM users WHERE phone_number = ? AND status = 0',
+      'SELECT id FROM users WHERE phone_number = ? AND status >= 0',
       [phoneNumber]
     );
 
@@ -382,7 +382,7 @@ class AuthService {
       if (existingUserId) {
         // Upgrade existing anonymous user
         const [result] = await connection.execute(
-          'UPDATE users SET username = ?, phone_number = ?, password = ?, updated_at = NOW() WHERE id = ? AND device_id = ? AND status = 0',
+          'UPDATE users SET username = ?, phone_number = ?, password = ?, updated_at = NOW() WHERE id = ? AND device_id = ? AND status >= 0',
           [accountName, phoneNumber, hashedPassword, existingUserId, deviceId]
         );
 
@@ -440,7 +440,7 @@ class AuthService {
   async userLogin(phoneNumber, password, timestamp, clientIP) {
     // Find user by phone number
     const [users] = await pool.execute(
-      'SELECT id, device_id, password, username FROM users WHERE phone_number = ? AND status = 0',
+      'SELECT id, device_id, password, username, status FROM users WHERE phone_number = ? AND status >= 0',
       [phoneNumber]
     );
 
@@ -466,6 +466,7 @@ class AuthService {
     return {
       userId: user.id,
       userName: user.username,
+      userStatus: user.status,
       sessionCreated
     };
   }

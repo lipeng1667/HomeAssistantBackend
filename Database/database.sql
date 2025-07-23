@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(100),
     phone_number VARCHAR(16),
     password VARCHAR(64) COMMENT 'SHA-256(orignial pass)',
-    status TINYINT UNSIGNED DEFAULT 0 COMMENT '0 = normal, 1 = deleted',
+    status TINYINT DEFAULT 0 COMMENT '-1 = deleted, 0 = normal, 87 = admin',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT NULL,
     deleted_at TIMESTAMP NULL DEFAULT NULL,

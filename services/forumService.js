@@ -232,7 +232,7 @@ class ForumService {
       SELECT t.*, c.name as category, u.username as author_name, u.id as author_id
       FROM forum_topics t
       JOIN forum_categories c ON t.category_id = c.id
-      JOIN users u ON t.user_id = u.id
+      JOIN users u ON t.user_id = u.id AND u.status >= 0
       WHERE t.id = ?
     `;
     let topicParams = [topicId];
@@ -269,7 +269,7 @@ class ForumService {
     const [replies] = await pool.execute(`
       SELECT r.*, u.username as author_name, u.id as author_id
       FROM forum_replies r
-      JOIN users u ON r.user_id = u.id
+      JOIN users u ON r.user_id = u.id AND u.status >= 0
       ${whereClause}
       ORDER BY r.created_at ASC
     `, queryParams);
@@ -559,7 +559,7 @@ class ForumService {
     const [replies] = await pool.execute(`
       SELECT r.*, u.username as author_name, u.id as author_id
       FROM forum_replies r
-      JOIN users u ON r.user_id = u.id
+      JOIN users u ON r.user_id = u.id AND u.status >= 0
       ${whereClause}
       ${sortClause}
       LIMIT ? OFFSET ?
@@ -738,7 +738,7 @@ class ForumService {
       const [updatedReply] = await connection.execute(`
         SELECT r.*, u.username as author_name, u.id as author_id
         FROM forum_replies r
-        JOIN users u ON r.user_id = u.id
+        JOIN users u ON r.user_id = u.id AND u.status >= 0
         WHERE r.id = ?
       `, [replyId]);
       
@@ -926,7 +926,7 @@ class ForumService {
                1.0 as relevance_score
         FROM forum_topics t
         JOIN forum_categories c ON t.category_id = c.id
-        JOIN users u ON t.user_id = u.id
+        JOIN users u ON t.user_id = u.id AND u.status >= 0
         WHERE t.status = 0 AND (t.title LIKE ? OR t.content LIKE ?)
       `;
       
@@ -949,7 +949,7 @@ class ForumService {
         FROM forum_replies r
         JOIN forum_topics t ON r.topic_id = t.id
         JOIN forum_categories c ON t.category_id = c.id
-        JOIN users u ON r.user_id = u.id
+        JOIN users u ON r.user_id = u.id AND u.status >= 0
         WHERE r.status = 0 AND r.content LIKE ?
       `;
       
@@ -1176,7 +1176,7 @@ class ForumService {
       SELECT t.*, c.name as category, u.username as author_name, u.id as author_id
       FROM forum_topics t
       JOIN forum_categories c ON t.category_id = c.id
-      JOIN users u ON t.user_id = u.id
+      JOIN users u ON t.user_id = u.id AND u.status >= 0
     `;
     
     const params = [];

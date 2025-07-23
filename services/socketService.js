@@ -125,7 +125,7 @@ class SocketService {
 
       // Verify user exists in database
       const [users] = await pool.execute(
-        'SELECT id, username, device_id FROM users WHERE id = ? AND status = 0',
+        'SELECT id, username, device_id FROM users WHERE id = ? AND status >= 0',
         [userId]
       );
 

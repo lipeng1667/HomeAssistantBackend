@@ -58,7 +58,7 @@ router.get('/messages', async (req, res) => {
 
     // Validate user exists and is active
     const [users] = await pool.execute(
-      'SELECT id, device_id FROM users WHERE id = ? AND status = 0',
+      'SELECT id, device_id FROM users WHERE id = ? AND status >= 0',
       [userId]
     );
 

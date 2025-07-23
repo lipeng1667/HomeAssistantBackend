@@ -220,7 +220,8 @@ router.post('/login', async (req, res) => {
       data: {
         user: {
           id: result.userId,
-          name: result.userName
+          name: result.userName,
+          status: result.userStatus
         }
       }
     });

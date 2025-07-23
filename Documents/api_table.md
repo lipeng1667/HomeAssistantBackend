@@ -70,7 +70,8 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 | Method | Endpoint                               | Description                       |Done|
 | ------ | -------------------------------------- | --------------------------------- |----|
-| POST   | `/api/admin/login`                     | Admin login                       | ❌ |
+| GET    | `/admin/dashboard`                     | Admin dashboard overview          | ✅ |
+| GET    | `/admin/profile`                       | Admin user profile                | ✅ |
 
 ---
 
