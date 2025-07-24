@@ -103,6 +103,8 @@ curl -X POST http://localhost:10000/api/auth/register \
 | `data` | Object | Response data container |
 | `data.user` | Object | User information object |
 | `data.user.id` | Integer | User's unique database ID |
+| `data.user.name` | String | User's name |
+| `data.user.status` | Integer | User's role status (-1=deleted, 0=normal, 87=admin) |
 
 **Response Error Codes:**
 
@@ -120,7 +122,9 @@ curl -X POST http://localhost:10000/api/auth/register \
   "status": "success",
   "data": {
     "user": {
-      "id": 1
+      "id": 1,
+      "name": "michale",
+      "status": 0
     }
   }
 }
@@ -137,8 +141,9 @@ curl -X POST http://localhost:10000/api/auth/register \
 
 ## `POST /api/auth/login`
 
-login with phonenumber and password. database will store the sha-256(original passowrd), so server can compaire the password
-using the same encryption method.
+Login with phone number and password. Database stores SHA-256(original password), so server can compare the password using the same encryption method.
+
+**Cross-Device Login Support**: The `user_id` parameter is now optional to support login from new devices where the user_id is unknown. When `user_id` is provided, it will be validated against the phone number lookup for additional security.
 
 **App Authentication:** Required (see headers above)
 
@@ -146,12 +151,22 @@ using the same encryption method.
 
 | Name | Type | Description | Required |
 |---|---|---|---|
-| `user_id` | String | A unique identifier for the user. | Yes |
+| `user_id` | String | A unique identifier for the user (optional for cross-device login) | No |
 | `phone_number` | String | phone number | Yes |
 | `password` | String | sha-256(sha-256(original password)+timestamp) | Yes |
 
-**Example Request:**
+**Example Requests:**
 
+**Cross-device login (new device, user_id unknown):**
+```bash
+curl -X POST http://localhost:10000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -d '{"phone_number":"18611112222", "password":"64-bit sha256 password"}'
+```
+
+**Same device login (with user_id validation):**
 ```bash
 curl -X POST http://localhost:10000/api/auth/login \
   -H "Content-Type: application/json" \

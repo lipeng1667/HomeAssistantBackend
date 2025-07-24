@@ -413,8 +413,16 @@ class AuthService {
         await this.updateSessionStatus(userId, 'login');
       }
 
+      // Get user data to return name and status
+      const [userData] = await connection.execute(
+        'SELECT username, status FROM users WHERE id = ?',
+        [userId]
+      );
+
       return {
         userId,
+        userName: userData[0].username,
+        userStatus: userData[0].status,
         isUpgrade: !!existingUserId
       };
     } catch (error) {
@@ -433,11 +441,12 @@ class AuthService {
    * @param {string} password - SHA-256(storedHash + timestamp) from client
    * @param {number} timestamp - Timestamp from request headers
    * @param {string} clientIP - Client IP address
+   * @param {number|null} expectedUserId - Optional user ID for validation
    * @returns {Promise<Object>} Login result
    * @throws {Error} Authentication or database errors
    * @sideEffects Logs activity, creates Redis session
    */
-  async userLogin(phoneNumber, password, timestamp, clientIP) {
+  async userLogin(phoneNumber, password, timestamp, clientIP, expectedUserId = null) {
     // Find user by phone number
     const [users] = await pool.execute(
       'SELECT id, device_id, password, username, status FROM users WHERE phone_number = ? AND status >= 0',
@@ -449,6 +458,11 @@ class AuthService {
     }
 
     const user = users[0];
+
+    // Optional user ID validation
+    if (expectedUserId !== null && user.id !== expectedUserId) {
+      throw new Error('User ID mismatch');
+    }
 
     // Verify password using stored hash and timestamp
     const isValidPassword = this.verifyPassword(user.password, timestamp, password);

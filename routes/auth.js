@@ -137,7 +137,9 @@ router.post('/register', async (req, res) => {
       status: 'success',
       data: {
         user: {
-          id: result.userId
+          id: result.userId,
+          name: result.userName,
+          status: result.userStatus
         }
       }
     });
@@ -191,8 +193,8 @@ router.post('/login', async (req, res) => {
     const { user_id, phone_number, password } = req.body;
     const timestamp = req.headers['x-timestamp'];
 
-    // Validate required parameters
-    if (!user_id || !phone_number || !password) {
+    // Validate required parameters (user_id is now optional)
+    if (!phone_number || !password) {
       return res.status(400).json({
         status: 'error',
         message: 'parameter invalid'
@@ -212,7 +214,8 @@ router.post('/login', async (req, res) => {
       phone_number,
       password,
       parseInt(timestamp),
-      clientIP
+      clientIP,
+      user_id ? parseInt(user_id) : null
     );
 
     res.json({
@@ -228,7 +231,7 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
 
-    if (error.message === 'User not found' || error.message === 'Invalid password') {
+    if (error.message === 'User not found' || error.message === 'Invalid password' || error.message === 'User ID mismatch') {
       return res.status(403).json({
         status: 'error',
         message: 'Forbidden'
