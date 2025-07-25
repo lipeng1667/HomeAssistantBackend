@@ -23,78 +23,65 @@
 
 - [] when user edit a topic or reply, change it's status to -1 for review
 
-2025.07.16
+2025.07.25
 
-```text
-about websocket to different instance, here is the solution from gemini, let talk about it later:
- Of course. This is a classic and important challenge when scaling real-time applications with Node.js clustering. Your analysis is correct: the @socket.io/redis-adapter is doing its job of broadcasting events across instances, but it doesn't handle how incoming connections are distributed.
+## Admin Role System & Enhanced Authentication
 
-  The root of the problem is that each of your PM2 instances is a separate server, and without a mechanism to ensure a client "sticks" to one instance, the client can establish connections with multiple instances.
+### Core Admin Infrastructure
 
-  Here are some solutions, starting with the most standard and recommended approach.
+- [x] Update users table status field: -1=deleted, 0=normal, 87=admin
+- [x] Update all SQL queries to use 'status >= 0' pattern
+- [x] Create adminAuth middleware with role-based access control
+- [x] Create permission utilities for scalable admin features
+- [x] Enhance login response to include user status and session_token
+- [x] Update API documentation for admin endpoints and authentication
 
-  Solution 1: Implement Sticky Sessions (Recommended)
+### Enhanced Authentication System
 
-  The most robust solution is to use "sticky sessions" (also known as session affinity) at the load balancer level. This ensures that all requests (including the initial HTTP polling and the WebSocket upgrade) from a specific user are always routed to the same PM2 instance.
+- [ ] Implement enhanced Redis session structure with user_status and session_token
+- [ ] Update authService.userLogin to generate and store session tokens
+- [ ] Update authService.registerUser to generate and store session tokens
+- [ ] Enhance authenticateUser middleware to handle session tokens
+- [ ] Create authenticateAdmin middleware with audit logging
+- [ ] Add session token validation in admin operations
 
-  How to achieve this:
+### Forum Admin Features
 
-  If you are using a reverse proxy like Nginx in front of your Node.js application, you can use the ip_hash directive. This uses the client's IP address to determine which server instance should handle the request.
+- [ ] Implement review queue API (/admin/forum/review-queue)
+- [ ] Create individual post moderation API (/admin/forum/moderate)
+- [ ] Build bulk moderation actions API (/admin/forum/moderate/bulk)
+- [ ] Add forum analytics and statistics APIs
+- [ ] Enhance forum responses with admin role identification
+- [ ] Implement admin action audit logging for all moderation activities
 
-  Here is an example Nginx configuration snippet:
+### Admin Route Infrastructure
 
-    1 upstream my_app {
-    2   # Use ip_hash for sticky sessions
-    3   ip_hash;
-    4
-    5   server 127.0.0.1:3001; # PM2 instance 1
-    6   server 127.0.0.1:3002; # PM2 instance 2
-    7   server 127.0.0.1:3003; # PM2 instance 3
-    8   # ... add all your PM2 instance addresses
-    9 }
-   10
-   11 server {
-   12   listen 80;
-   13   server_name your_domain.com;
-   14
-   15   location / {
-   16     proxy_pass http://my_app;
-   17     proxy_http_version 1.1;
-   18     proxy_set_header Upgrade $http_upgrade;
-   19     proxy_set_header Connection "upgrade";
-   20     proxy_set_header Host $host;
-   21     proxy_set_header X-Real-IP $remote_addr;
-   22     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-   23   }
-   24 }
+- [ ] Create /routes/admin/forum.js with protected admin routes
+- [ ] Add admin dashboard endpoints for forum management
+- [ ] Implement admin user management APIs (view/delete/restore users)
+- [ ] Create admin system metrics and monitoring endpoints
 
-  If you are using a different load balancer (e.g., AWS ELB, HAProxy, or a cloud provider's service), look for a "session affinity" or "sticky session" setting and enable it.
+### Security Enhancements
 
-  Solution 2: Force WebSocket Transport Only
+- [ ] Add IP address validation for admin sessions
+- [ ] Implement session token rotation (optional - future enhancement)
+- [ ] Add rate limiting for admin endpoints
+- [ ] Create admin activity monitoring and alerting
+- [ ] Add admin session timeout and security policies
 
-  The multiple connection issue is often exacerbated by Socket.io's default behavior, which starts with HTTP long-polling and then tries to upgrade to WebSockets. Each polling request is a separate HTTP request that a load balancer might send to a different server instance.
+### Testing & Validation
 
-  You can configure Socket.io to only use the WebSocket transport, which establishes a more persistent, single connection.
+- [ ] Test admin authentication flow with session tokens
+- [ ] Validate admin permission checks across all endpoints
+- [ ] Test forum moderation workflow end-to-end
+- [ ] Verify audit logging captures all admin actions
+- [ ] Test backward compatibility with existing client apps
 
-  Server-side configuration (`services/socketService.js`):
+### Documentation & Integration
 
-   1 const { Server } = require("socket.io");
-   2
-   3 const io = new Server(httpServer, {
-   4   transports: ['websocket'] // Force WebSocket-only
-   5 });
+- [ ] Create admin user guide and API integration examples
+- [ ] Update client-side integration documentation
+- [ ] Add security best practices guide for admin operations
+- [ ] Create admin troubleshooting and monitoring guide
 
-  Client-side configuration:
-
-   1 const socket = io({
-   2   transports: ['websocket'] // Force WebSocket-only
-   3 });
-
-  Caveat: This approach is simpler but has a downside: users behind corporate firewalls or proxies that block WebSocket connections will not be able to connect. The sticky session approach (Solution 1) is generally more reliable as it supports all transports.
-
-  Solution 3: Review Client-Side Connection Logic
-
-  Aggressive reconnection logic on the client can sometimes worsen this issue, especially if instances are restarting or network conditions are unstable. While not a primary fix, ensuring your client-side code doesn't try to reconnect too rapidly or create new socket instances unnecessarily can help mitigate the symptoms.
-
-  In summary, implementing sticky sessions (Solution 1) is the industry-standard and most effective way to resolve this issue while maintaining a robust and scalable architecture.
-```
+---

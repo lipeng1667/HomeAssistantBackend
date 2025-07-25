@@ -105,6 +105,7 @@ curl -X POST http://localhost:10000/api/auth/register \
 | `data.user.id` | Integer | User's unique database ID |
 | `data.user.name` | String | User's name |
 | `data.user.status` | Integer | User's role status (-1=deleted, 0=normal, 87=admin) |
+| `data.user.session_token` | String | UUID v4 token for enhanced admin security |
 
 **Response Error Codes:**
 
@@ -124,7 +125,8 @@ curl -X POST http://localhost:10000/api/auth/register \
     "user": {
       "id": 1,
       "name": "michale",
-      "status": 0
+      "status": 0,
+      "session_token": "b2c3d4e5-f6g7-4890-8bcd-def123456789"
     }
   }
 }
@@ -145,6 +147,8 @@ Login with phone number and password. Database stores SHA-256(original password)
 
 **Cross-Device Login Support**: The `user_id` parameter is now optional to support login from new devices where the user_id is unknown. When `user_id` is provided, it will be validated against the phone number lookup for additional security.
 
+**Enhanced Security**: Login response now includes a session token for admin operations and enhanced security validation.
+
 **App Authentication:** Required (see headers above)
 
 **Parameters:**
@@ -158,6 +162,7 @@ Login with phone number and password. Database stores SHA-256(original password)
 **Example Requests:**
 
 **Cross-device login (new device, user_id unknown):**
+
 ```bash
 curl -X POST http://localhost:10000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -167,6 +172,7 @@ curl -X POST http://localhost:10000/api/auth/login \
 ```
 
 **Same device login (with user_id validation):**
+
 ```bash
 curl -X POST http://localhost:10000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -185,6 +191,7 @@ curl -X POST http://localhost:10000/api/auth/login \
 | `data.user.id` | Integer | User's unique database ID |
 | `data.user.name` | String | User's name |
 | `data.user.status` | Integer | User's role status (-1=deleted, 0=normal, 87=admin) |
+| `data.user.session_token` | String | UUID v4 token for enhanced admin security |
 
 **Response Error Codes:**
 
@@ -205,7 +212,8 @@ curl -X POST http://localhost:10000/api/auth/login \
     "user": {
       "id": 1,
       "name": "Test",
-      "status": 0
+      "status": 0,
+      "session_token": "a1b2c3d4-e5f6-4789-9abc-def012345678"
     }
   }
 }
