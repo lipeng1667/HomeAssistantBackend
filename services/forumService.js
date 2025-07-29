@@ -229,7 +229,7 @@ class ForumService {
     
     // Get topic details - include user's own under-review topics if user_id provided
     let topicQuery = `
-      SELECT t.*, c.name as category, u.username as author_name, u.id as author_id
+      SELECT t.*, c.name as category, u.username as author_name, u.id as author_id, u.status as author_status
       FROM forum_topics t
       JOIN forum_categories c ON t.category_id = c.id
       JOIN users u ON t.user_id = u.id AND u.status >= 0
@@ -267,7 +267,7 @@ class ForumService {
     
     // Get all replies for hierarchical sorting
     const [replies] = await pool.execute(`
-      SELECT r.*, u.username as author_name, u.id as author_id
+      SELECT r.*, u.username as author_name, u.id as author_id, u.status as author_status
       FROM forum_replies r
       JOIN users u ON r.user_id = u.id AND u.status >= 0
       ${whereClause}
@@ -557,7 +557,7 @@ class ForumService {
     
     // Get replies with simplified query
     const [replies] = await pool.execute(`
-      SELECT r.*, u.username as author_name, u.id as author_id
+      SELECT r.*, u.username as author_name, u.id as author_id, u.status as author_status
       FROM forum_replies r
       JOIN users u ON r.user_id = u.id AND u.status >= 0
       ${whereClause}
@@ -736,7 +736,7 @@ class ForumService {
       
       // Return updated reply
       const [updatedReply] = await connection.execute(`
-        SELECT r.*, u.username as author_name, u.id as author_id
+        SELECT r.*, u.username as author_name, u.id as author_id, u.status as author_status
         FROM forum_replies r
         JOIN users u ON r.user_id = u.id AND u.status >= 0
         WHERE r.id = ?
@@ -1173,7 +1173,7 @@ class ForumService {
   buildTopicQuery(filters) {
     const { category, sort, search, user_id, limit, offset } = filters;
     let query = `
-      SELECT t.*, c.name as category, u.username as author_name, u.id as author_id
+      SELECT t.*, c.name as category, u.username as author_name, u.id as author_id, u.status as author_status
       FROM forum_topics t
       JOIN forum_categories c ON t.category_id = c.id
       JOIN users u ON t.user_id = u.id AND u.status >= 0
@@ -1257,7 +1257,8 @@ class ForumService {
       category: topic.category,
       author: {
         id: topic.author_id,
-        name: topic.author_name
+        name: topic.author_name,
+        is_admin: topic.author_status === 87
       },
       reply_count: topic.reply_count,
       like_count: topic.like_count,
@@ -1282,7 +1283,8 @@ class ForumService {
       content: reply.content,
       author: {
         id: reply.author_id,
-        name: reply.author_name
+        name: reply.author_name,
+        is_admin: reply.author_status === 87
       },
       parent_reply_id: reply.parent_reply_id,
       like_count: reply.like_count,

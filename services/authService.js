@@ -46,6 +46,7 @@
 const pool = require('../config/database');
 const redisClient = require('../config/redis.js');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 
 class AuthService {
   /**
@@ -129,36 +130,40 @@ class AuthService {
    * @param {number} userId - User ID for session
    * @param {string} deviceId - Device identifier
    * @param {string} clientIP - Client IP address
-   * @returns {Promise<boolean>} True if session created successfully
+   * @returns {Promise<Object>} Session creation result with token
    * @throws Does not throw - logs errors and returns false
    * @sideEffects Creates Redis hash with 7-day TTL
    */
   async createAnonymousUserSession(userId, deviceId, clientIP) {
     if (!redisClient.isReady()) {
       console.warn('Redis not available for session creation');
-      return false;
+      return { success: false, sessionToken: null };
     }
 
     try {
       const client = redisClient.getClient();
       const userKey = redisClient.key(`user:${userId}`);
       const now = Date.now().toString();
+      const sessionToken = uuidv4();
 
-      // Create session data
+      // Create enhanced session data
       await client.hSet(userKey, {
         device_id: deviceId,
         login_time: now,
         last_seen: now,
         status: 'anonymous',
+        user_status: '0', // Default normal user
+        username: '', // Empty for anonymous
+        session_token: sessionToken,
         ip_address: clientIP || 'unknown'
       });
 
       // Set TTL to 7 days
       await client.expire(userKey, 604800);
-      return true;
+      return { success: true, sessionToken };
     } catch (redisError) {
       console.error('Redis session creation failed:', redisError);
-      return false;
+      return { success: false, sessionToken: null };
     }
   }
 
@@ -244,12 +249,13 @@ class AuthService {
     }
 
     // Create Redis session
-    const sessionCreated = await this.createAnonymousUserSession(userId, deviceId, clientIP);
+    const sessionResult = await this.createAnonymousUserSession(userId, deviceId, clientIP);
 
     return {
       userId,
       isNewUser,
-      sessionCreated
+      sessionCreated: sessionResult.success,
+      sessionToken: sessionResult.sessionToken
     };
   }
 
@@ -408,21 +414,28 @@ class AuthService {
 
       await connection.commit();
 
-      // Update session status if upgrading from anonymous
-      if (existingUserId) {
-        await this.updateSessionStatus(userId, 'login');
-      }
-
-      // Get user data to return name and status
+      // Get user data
       const [userData] = await connection.execute(
         'SELECT username, status FROM users WHERE id = ?',
         [userId]
+      );
+
+      await connection.commit();
+
+      // Create new session for registered user (or update existing)
+      const sessionResult = await this.createUserSession(
+        userId, 
+        deviceId, 
+        null, // clientIP not available in register context
+        userData[0].username,
+        userData[0].status
       );
 
       return {
         userId,
         userName: userData[0].username,
         userStatus: userData[0].status,
+        sessionToken: sessionResult.sessionToken,
         isUpgrade: !!existingUserId
       };
     } catch (error) {
@@ -471,8 +484,14 @@ class AuthService {
       throw new Error('Invalid password');
     }
 
-    // Create Redis session
-    const sessionCreated = await this.createUserSession(user.id, user.device_id, clientIP);
+    // Create Redis session with user data
+    const sessionResult = await this.createUserSession(
+      user.id, 
+      user.device_id, 
+      clientIP,
+      user.username,
+      user.status
+    );
 
     // Log login activity
     await this.logUserActivity(user.id, 0, 'user_login');
@@ -481,7 +500,8 @@ class AuthService {
       userId: user.id,
       userName: user.username,
       userStatus: user.status,
-      sessionCreated
+      sessionToken: sessionResult.sessionToken,
+      sessionCreated: sessionResult.success
     };
   }
 
@@ -525,36 +545,42 @@ class AuthService {
    * @param {number} userId - User ID for session
    * @param {string} deviceId - Device identifier
    * @param {string} clientIP - Client IP address
-   * @returns {Promise<boolean>} True if session created successfully
+   * @param {string} username - Username for session
+   * @param {number} userStatus - User status (0=normal, 87=admin)
+   * @returns {Promise<Object>} Session creation result with token
    * @throws Does not throw - logs errors and returns false
    * @sideEffects Creates Redis hash with 7-day TTL
    */
-  async createUserSession(userId, deviceId, clientIP) {
+  async createUserSession(userId, deviceId, clientIP, username = '', userStatus = 0) {
     if (!redisClient.isReady()) {
       console.warn('Redis not available for session creation');
-      return false;
+      return { success: false, sessionToken: null };
     }
 
     try {
       const client = redisClient.getClient();
       const userKey = redisClient.key(`user:${userId}`);
       const now = Date.now().toString();
+      const sessionToken = uuidv4();
 
-      // Create session data
+      // Create enhanced session data
       await client.hSet(userKey, {
         device_id: deviceId,
         login_time: now,
         last_seen: now,
         status: 'login',
+        user_status: userStatus.toString(),
+        username: username,
+        session_token: sessionToken,
         ip_address: clientIP || 'unknown'
       });
 
       // Set TTL to 7 days
       await client.expire(userKey, 604800);
-      return true;
+      return { success: true, sessionToken };
     } catch (redisError) {
       console.error('Redis session creation failed:', redisError);
-      return false;
+      return { success: false, sessionToken: null };
     }
   }
 }

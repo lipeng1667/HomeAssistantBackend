@@ -26,7 +26,10 @@
  *   - device_id: Device identifier from login
  *   - login_time: Unix timestamp when session was created
  *   - last_seen: Unix timestamp of last API request
- *   - active: User status ("true" for active, "false" for disabled)
+ *   - status: Session status ("anonymous", "login", "blocked")
+ *   - user_status: User role status ("0"=normal, "87"=admin)
+ *   - username: Username from database
+ *   - session_token: UUID v4 token for enhanced security
  *   - ip_address: Client IP address (optional)
  * 
  * Authentication Flow:
@@ -143,12 +146,16 @@ const authenticateUser = async (req, res, next) => {
       .expire(userKey, 604800) // 7 days
       .exec();
 
-    // Set user data for route handlers
+    // Set enhanced user data for route handlers
     req.user = {
       id: parseInt(user_id),
       device_id: userData.device_id,
       login_time: userData.login_time,
       last_seen: now,
+      status: userData.status,
+      user_status: parseInt(userData.user_status || 0),
+      username: userData.username || '',
+      session_token: userData.session_token,
       ip_address: userData.ip_address
     };
 

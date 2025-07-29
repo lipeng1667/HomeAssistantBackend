@@ -29,7 +29,8 @@ router.use(authenticateUser);
 router.use(enhanceAdminContext);
 router.use(requireAdmin);
 
-// Admin route groups (to be implemented)
+// Admin route groups
+router.use('/forum', require('./forum'));
 // router.use('/users', require('./users'));
 // router.use('/content', require('./content'));
 // router.use('/metrics', require('./metrics'));

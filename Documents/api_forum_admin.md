@@ -85,14 +85,14 @@ Get all posts awaiting moderation (status = -1) for admin review.
 |------|------|-------------|----------|---------|
 | `page` | Integer | Page number (1-based) | No | 1 |
 | `limit` | Integer | Items per page (1-100) | No | 20 |
-| `content_type` | String | Filter: "topics", "replies", "all" | No | "all" |
+| `type` | String | Filter: "topic", "reply", "all" | No | "all" |
 | `sort` | String | Sort: "newest", "oldest", "priority" | No | "newest" |
 | `category` | String | Filter by forum category | No | All |
 
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/admin/forum/review-queue?page=1&limit=50&content_type=topics" \
+curl -X GET "http://localhost:10000/admin/forum/review-queue?page=1&limit=50&type=topic" \
   -H "Content-Type: application/json" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..." \
@@ -376,13 +376,13 @@ Get comprehensive forum analytics and moderation statistics for admin dashboard.
 
 | Name | Type | Description | Required | Default |
 |------|------|-------------|----------|---------|
-| `timeframe` | String | "24h", "7d", "30d", "90d" | No | "7d" |
+| `period` | String | "today", "week", "month", "all" | No | "week" |
 | `metrics` | String | Comma-separated: "moderation,engagement,users" | No | "all" |
 
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/admin/forum/analytics?timeframe=7d&metrics=moderation,engagement" \
+curl -X GET "http://localhost:10000/admin/forum/analytics?period=week&metrics=moderation,engagement" \
   -H "Content-Type: application/json" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..." \
@@ -396,7 +396,7 @@ curl -X GET "http://localhost:10000/admin/forum/analytics?timeframe=7d&metrics=m
 {
   "status": "success",
   "data": {
-    "timeframe": "7d",
+    "period": "week",
     "moderation_stats": {
       "total_moderated": 156,
       "approved": 134,

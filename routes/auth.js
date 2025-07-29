@@ -139,7 +139,8 @@ router.post('/register', async (req, res) => {
         user: {
           id: result.userId,
           name: result.userName,
-          status: result.userStatus
+          status: result.userStatus,
+          session_token: result.sessionToken
         }
       }
     });
@@ -224,7 +225,8 @@ router.post('/login', async (req, res) => {
         user: {
           id: result.userId,
           name: result.userName,
-          status: result.userStatus
+          status: result.userStatus,
+          session_token: result.sessionToken
         }
       }
     });

@@ -51,7 +51,7 @@ This document provides a detailed reference for the Home Assistant Backend API.
 | POST   | `/api/chat/upload`                 | Upload file/image for messaging          | 🔄 |
 | GET    | `/api/chat/search`                 | Search messages in conversations          | 🔄 |
 
-**WebSocket Events (Real-time)**
+### WebSocket Events (Real-time)
 
 - `new_message` - New message received
 - `typing_indicator` - User typing status
@@ -62,7 +62,7 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 | Method | Endpoint             | Description                                |Done|
 | ------ | -------------------- | ------------------------------------------ |----|
-| POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) | ❌ |
+| POST   | `/api/logs/activity` | Log user actions (login, navigation, etc.) | ✅ |
 
 ### For WebManger
 
@@ -72,6 +72,16 @@ This document provides a detailed reference for the Home Assistant Backend API.
 | ------ | -------------------------------------- | --------------------------------- |----|
 | GET    | `/admin/dashboard`                     | Admin dashboard overview          | ✅ |
 | GET    | `/admin/profile`                       | Admin user profile                | ✅ |
+
+- 🛠️ Admin Forum
+
+| Method | Endpoint                               | Description                       |Done|
+| ------ | -------------------------------------- | --------------------------------- |----|
+| GET    | `/admin/forum/review-queue`            | Get posts awaiting moderation     | 📝 |
+| POST   | `/admin/forum/moderate`                | Moderate single post (approve/reject) | 📝 |
+| POST   | `/admin/forum/moderate/bulk`           | Bulk moderation actions           | 📝 |
+| GET    | `/admin/forum/analytics`               | Forum analytics and statistics    | 📝 |
+| GET    | `/admin/forum/stats`                   | Real-time forum dashboard stats   | 📝 |
 
 ---
 

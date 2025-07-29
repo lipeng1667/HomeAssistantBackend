@@ -1,32 +1,39 @@
 /**
  * @file middleware/adminAuth.js
- * @description Admin authentication middleware for role-based access control
+ * @description Enhanced admin authentication middleware with session token support
  * @author Claude Code
  * @created 2025-07-23
+ * @modified 2025-07-29
  * 
  * This middleware provides scalable admin authentication and authorization
- * for protecting admin-only routes and operations. It builds on the existing
- * userAuth middleware to add role-based permissions.
+ * with enhanced security features including session token validation and
+ * comprehensive audit logging for all admin operations.
  * 
  * Functions:
  * - requireAdmin: Middleware to ensure user has admin status (87)
+ * - authenticateAdmin: Full admin authentication with session token support
+ * - validateSessionToken: Optional session token validation middleware
  * - requireAdminOrOwner: Middleware to allow admin or resource owner access
- * - logAdminAction: Utility to log admin actions for audit trail
+ * - logAdminAction: Enhanced audit logging with IP tracking
  * - isAdmin: Helper function to check if user is admin
  * - checkAdminPermission: Flexible permission checker for specific operations
  * 
  * Security Features:
- * - Explicit admin status validation (status = 87)
- * - Audit logging for all admin actions
- * - Flexible permission system for different admin operations
- * - Integration with existing authentication system
+ * - Enhanced admin status validation (user_status = 87)
+ * - Optional session token validation for sensitive operations
+ * - Comprehensive audit logging with IP addresses and endpoints
+ * - Failed access attempt logging
+ * - Integration with Redis session management
  * 
  * Dependencies:
  * - config/database.js: MySQL connection pool for audit logging
+ * - config/redis.js: Redis client for session management
  * - middleware/userAuth.js: Base user authentication
  */
 
 const pool = require('../config/database');
+const redisClient = require('../config/redis.js');
+const { authenticateUser } = require('./userAuth');
 
 /**
  * Check if user has admin status
@@ -35,28 +42,24 @@ const pool = require('../config/database');
  * @returns {boolean} True if user has admin status (87)
  */
 const isAdmin = (user) => {
-  return user && user.status === 87;
+  return user && user.user_status === 87;
 };
 
 /**
- * Log admin action for audit trail
+ * Enhanced admin action logging with IP tracking
  * @async
  * @function logAdminAction
  * @param {number} adminId - Admin user ID
  * @param {string} action - Action performed
- * @param {string} targetType - Type of target (user, topic, reply, system)
- * @param {number|null} targetId - ID of target resource
- * @param {Object} details - Additional action details
+ * @param {Object} details - Additional action details with ip_address, endpoint, etc.
  * @returns {Promise<void>}
  */
-const logAdminAction = async (adminId, action, targetType = null, targetId = null, details = {}) => {
+const logAdminAction = async (adminId, action, details = {}) => {
   try {
     await pool.execute(
       'INSERT INTO user_logs (user_id, action_type, action, metadata) VALUES (?, 99, ?, ?)',
       [adminId, `admin_${action}`, JSON.stringify({
-        target_type: targetType,
-        target_id: targetId,
-        details: details,
+        ...details,
         timestamp: new Date().toISOString()
       })]
     );
@@ -86,10 +89,10 @@ const requireAdmin = (req, res, next) => {
   // Check admin status
   if (!isAdmin(req.user)) {
     // Log unauthorized admin access attempt
-    logAdminAction(req.user.id, 'unauthorized_access_attempt', 'admin_route', null, {
-      route: req.path,
+    logAdminAction(req.user.id, 'unauthorized_access_attempt', {
+      endpoint: req.path,
       method: req.method,
-      ip: req.ip
+      ip_address: req.ip || 'unknown'
     }).catch(console.error);
 
     return res.status(403).json({
@@ -124,9 +127,12 @@ const requireAdminOrOwner = (ownerIdParam = 'userId') => {
     if (isAdmin(req.user) || userId === ownerId) {
       // Log admin action if admin is accessing someone else's resource
       if (isAdmin(req.user) && userId !== ownerId) {
-        logAdminAction(userId, 'access_user_resource', 'user', ownerId, {
-          route: req.path,
-          method: req.method
+        logAdminAction(userId, 'access_user_resource', {
+          target_type: 'user',
+          target_id: ownerId,
+          endpoint: req.path,
+          method: req.method,
+          ip_address: req.ip || 'unknown'
         }).catch(console.error);
       }
       
@@ -168,10 +174,12 @@ const checkAdminPermission = (operation) => {
     // based on different admin levels (e.g., 50 = moderator, 87 = admin, 99 = super admin)
     
     // Log the specific admin operation
-    logAdminAction(req.user.id, operation, 'permission_check', null, {
-      route: req.path,
+    logAdminAction(req.user.id, operation, {
+      target_type: 'permission_check',
+      endpoint: req.path,
       method: req.method,
-      operation: operation
+      operation: operation,
+      ip_address: req.ip || 'unknown'
     }).catch(console.error);
 
     next();
@@ -189,16 +197,133 @@ const enhanceAdminContext = (req, res, next) => {
   // Add admin utilities to request object
   req.adminUtils = {
     isAdmin: () => isAdmin(req.user),
-    logAction: (action, targetType, targetId, details) => 
-      logAdminAction(req.user.id, action, targetType, targetId, details),
+    logAction: (action, details) => 
+      logAdminAction(req.user.id, action, { ...details, ip_address: req.ip }),
     requiresAdmin: () => !isAdmin(req.user)
   };
 
   next();
 };
 
+/**
+ * Session token validation middleware for enhanced admin security
+ * @async
+ * @function validateSessionToken
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {void} Calls next() on success or sends 401 error response
+ */
+const validateSessionToken = async (req, res, next) => {
+  try {
+    const providedToken = req.headers['x-session-token'];
+    
+    // If no token provided, skip validation (optional middleware)
+    if (!providedToken) {
+      return next();
+    }
+
+    // Check if provided token matches session token
+    if (req.user && req.user.session_token && req.user.session_token !== providedToken) {
+      await logAdminAction(req.user.id, 'invalid_session_token', {
+        ip_address: req.ip || 'unknown',
+        endpoint: req.path
+      });
+
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid session token'
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Session token validation error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Session token validation failed'
+    });
+  }
+};
+
+/**
+ * Full admin authentication middleware with enhanced security
+ * @async
+ * @function authenticateAdmin
+ * @param {Object} req - Express request object with user_id in body
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {void} Calls next() on success or sends error response
+ */
+const authenticateAdmin = async (req, res, next) => {
+  try {
+    // First run standard user authentication
+    await new Promise((resolve, reject) => {
+      authenticateUser(req, res, (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+
+    // Check admin status
+    if (!isAdmin(req.user)) {
+      await logAdminAction(req.user.id, 'unauthorized_admin_access', {
+        ip_address: req.ip || 'unknown',
+        endpoint: req.path,
+        method: req.method
+      });
+
+      return res.status(403).json({
+        status: 'error',
+        message: 'Admin access required'
+      });
+    }
+
+    // Validate session token if provided
+    const providedToken = req.headers['x-session-token'];
+    if (providedToken && req.user.session_token !== providedToken) {
+      await logAdminAction(req.user.id, 'invalid_admin_session_token', {
+        ip_address: req.ip || 'unknown',
+        endpoint: req.path
+      });
+
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid session token'
+      });
+    }
+
+    // Log successful admin access
+    await logAdminAction(req.user.id, 'admin_access_granted', {
+      ip_address: req.ip || 'unknown',
+      endpoint: req.path,
+      method: req.method,
+      session_token_used: !!providedToken
+    });
+
+    next();
+  } catch (error) {
+    console.error('Admin authentication error:', error);
+    
+    // If it's a user authentication error, let it bubble up with proper status
+    if (error.status) {
+      return res.status(error.status).json({
+        status: 'error',
+        message: error.message
+      });
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Admin authentication failed'
+    });
+  }
+};
+
 module.exports = {
   requireAdmin,
+  authenticateAdmin,
+  validateSessionToken,
   requireAdminOrOwner,
   checkAdminPermission,
   enhanceAdminContext,
