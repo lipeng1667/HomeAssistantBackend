@@ -383,7 +383,7 @@ class ForumService {
 
     // Verify ownership - allow editing of user's own topics regardless of status
     const [topics] = await pool.execute(`
-      SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0)
+      SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0, 2)
     `, [topicId]);
 
     if (topics.length === 0) {
@@ -427,7 +427,11 @@ class ForumService {
         updateParams.push(categories[0].id);
       }
 
-      if (updateFields.length > 0) {
+      // Check if any content fields are being updated before modifying updateFields array
+      const hasContentUpdates = updateFields.length > 0;
+
+      if (hasContentUpdates) {
+        updateFields.push('status = -1'); // Reset to under review for re-moderation
         updateFields.push('updated_at = CURRENT_TIMESTAMP');
         updateParams.push(topicId);
 
@@ -436,8 +440,16 @@ class ForumService {
         `, updateParams);
       }
 
-      // Handle image updates if provided
+      // Handle image updates if provided - also reset status to -1 for re-moderation
       if (images !== undefined) {
+        // Reset status to under review if only images are being updated (no content/title/category changes)
+        if (!hasContentUpdates) {
+          await connection.execute(`
+            UPDATE forum_topics SET status = -1, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+          `, [topicId]);
+        }
+
         // Clear existing images by marking as deleted
         await connection.execute(`
           UPDATE forum_uploads 
@@ -482,7 +494,7 @@ class ForumService {
   async deleteTopic(topicId, userId) {
     // Verify ownership - allow deletion of user's own topics regardless of status
     const [topics] = await pool.execute(`
-      SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0)
+      SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0, 2)
     `, [topicId]);
 
     if (topics.length === 0) {
@@ -687,7 +699,7 @@ class ForumService {
 
     // Verify ownership - allow editing of user's own replies regardless of status
     const [replies] = await pool.execute(`
-      SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0)
+      SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0, 2)
     `, [replyId]);
 
     if (replies.length === 0) {
@@ -703,16 +715,24 @@ class ForumService {
     try {
       await connection.beginTransaction();
 
-      // Update content if provided
+      // Update content if provided - reset status to -1 for re-moderation
       if (content !== undefined) {
         await connection.execute(`
-          UPDATE forum_replies SET content = ?, updated_at = CURRENT_TIMESTAMP 
+          UPDATE forum_replies SET content = ?, status = -1, updated_at = CURRENT_TIMESTAMP 
           WHERE id = ?
         `, [content, replyId]);
       }
 
-      // Handle image updates if provided
+      // Handle image updates if provided - also reset status to -1 for re-moderation
       if (images !== undefined) {
+        // Reset status to under review if only images are being updated
+        if (content === undefined) {
+          await connection.execute(`
+            UPDATE forum_replies SET status = -1, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+          `, [replyId]);
+        }
+
         // Clear existing images by marking as deleted
         await connection.execute(`
           UPDATE forum_uploads 
@@ -764,7 +784,7 @@ class ForumService {
   async deleteReply(replyId, userId) {
     // Verify ownership - allow deletion of user's own replies regardless of status
     const [replies] = await pool.execute(`
-      SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0)
+      SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0, 2)
     `, [replyId]);
 
     if (replies.length === 0) {
