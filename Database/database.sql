@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS forum_replies (
     parent_reply_id INT UNSIGNED NULL COMMENT 'NULL for direct topic replies, foreign key for reply-to-reply',
     content TEXT NOT NULL,
     like_count INT UNSIGNED DEFAULT 0,
-    status TINYINT NOT NULL DEFAULT -1 COMMENT '-1 = awaiting review, 0 = published, 1 = deleted',
+    status TINYINT NOT NULL DEFAULT -1 COMMENT '-1 = awaiting review, 0 = published, 1 = deleted, 2 = rejected',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     -- Performance indexes

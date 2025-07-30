@@ -74,9 +74,9 @@ class ForumService {
         WHERE entity_type = ? AND entity_id IN (${placeholders}) AND status = 1
         ORDER BY created_at ASC
       `;
-      
+
       const [rows] = await pool.execute(query, [entityType, ...entityIds]);
-      
+
       // Group images by entity_id
       const imagesByEntity = {};
       for (const row of rows) {
@@ -92,7 +92,7 @@ class ForumService {
           uploaded_at: row.created_at
         });
       }
-      
+
       return imagesByEntity;
     } catch (error) {
       console.error('Error fetching images by entity:', error);
@@ -115,11 +115,11 @@ class ForumService {
     // Create maps for efficient lookup
     const replyMap = new Map();
     const childrenMap = new Map();
-    
+
     // Index all replies by ID and group children by parent_reply_id
     for (const reply of replies) {
       replyMap.set(reply.id, reply);
-      
+
       const parentId = reply.parent_reply_id;
       if (parentId !== null && parentId !== undefined) {
         if (!childrenMap.has(parentId)) {
@@ -128,15 +128,15 @@ class ForumService {
         childrenMap.get(parentId).push(reply);
       }
     }
-    
+
     // Sort children arrays by creation time for consistent ordering
     for (const children of childrenMap.values()) {
       children.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     }
-    
+
     const result = [];
     const visited = new Set();
-    
+
     /**
      * Depth-first traversal to build hierarchical order
      * @param {Object} reply - Current reply to process
@@ -145,27 +145,27 @@ class ForumService {
       if (visited.has(reply.id)) {
         return; // Prevent infinite loops in case of circular references
       }
-      
+
       visited.add(reply.id);
       result.push(reply);
-      
+
       // Add all children of this reply
       const children = childrenMap.get(reply.id) || [];
       for (const child of children) {
         addReplyWithChildren(child);
       }
     }
-    
+
     // Find all top-level replies (parent_reply_id is null) and sort by creation time
     const topLevelReplies = replies
       .filter(reply => reply.parent_reply_id === null || reply.parent_reply_id === undefined)
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-    
+
     // Process each top-level reply and its descendants
     for (const topReply of topLevelReplies) {
       addReplyWithChildren(topReply);
     }
-    
+
     return result;
   }
 
@@ -187,26 +187,26 @@ class ForumService {
   async getTopics(filters = {}) {
     const { page = 1, limit = 20, category, sort = 'newest', search, user_id } = filters;
     const offset = (page - 1) * limit;
-    
+
     const { query, params } = this.buildTopicQuery({ category, sort, search, user_id, limit, offset });
-    
+
     // Get total count for pagination
     const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM').replace(/ORDER BY[\s\S]*?LIMIT[\s\S]*$/, '');
     const countParams = params.slice(0, -2); // Remove limit and offset params
     const [countResult] = await pool.execute(countQuery, countParams);
     const totalItems = countResult[0].total;
-    
+
     // Get topics
     const [topics] = await pool.execute(query, params);
-    
+
     // Fetch images for all topics
     const topicIds = topics.map(topic => topic.id);
     const imagesByTopic = await this.fetchImagesByEntity('topic', topicIds);
-    
+
     // Format topics and build pagination
     const formattedTopics = topics.map(topic => this.formatTopicResponse(topic, imagesByTopic[topic.id] || []));
     const pagination = this.buildPagination(page, limit, totalItems);
-    
+
     return {
       topics: formattedTopics,
       pagination
@@ -226,7 +226,7 @@ class ForumService {
    */
   async getTopicById(topicId, replyFilters = {}) {
     const { user_id } = replyFilters;
-    
+
     // Get topic details - include user's own under-review topics if user_id provided
     let topicQuery = `
       SELECT t.*, c.name as category, u.username as author_name, u.id as author_id, u.status as author_status
@@ -236,35 +236,35 @@ class ForumService {
       WHERE t.id = ?
     `;
     let topicParams = [topicId];
-    
+
     if (user_id) {
-      // Include user's own under-review topics AND all published topics
-      topicQuery += ' AND (t.status = 0 OR (t.status = -1 AND t.user_id = ?))';
+      // Include user's own under-review/rejected topics AND all published topics
+      topicQuery += ' AND (t.status = 0 OR ((t.status = -1 or t.status = 2) AND t.user_id = ?))';
       topicParams.push(user_id);
     } else {
       // Only published topics
       topicQuery += ' AND t.status = 0';
     }
-    
+
     const [topics] = await pool.execute(topicQuery, topicParams);
-    
+
     if (topics.length === 0) {
       throw new Error('Topic not found');
     }
-    
+
     // Build WHERE clause for user-specific replies
     let whereClause = 'WHERE r.topic_id = ?';
     let queryParams = [topicId];
-    
+
     if (user_id) {
-      // Include user's own under-review replies AND all published replies
-      whereClause += ' AND (r.status = 0 OR (r.status = -1 AND r.user_id = ?))';
+      // Include user's own under-review/rejected replies AND all published replies
+      whereClause += ' AND (r.status = 0 OR ((r.status = -1 or r.status = 2) AND r.user_id = ?))';
       queryParams.push(user_id);
     } else {
       // Only published replies
       whereClause += ' AND r.status = 0';
     }
-    
+
     // Get all replies for hierarchical sorting
     const [replies] = await pool.execute(`
       SELECT r.*, u.username as author_name, u.id as author_id, u.status as author_status
@@ -273,22 +273,22 @@ class ForumService {
       ${whereClause}
       ORDER BY r.created_at ASC
     `, queryParams);
-    
+
     // Fetch images for topic and replies
     const topicImages = await this.fetchImagesByEntity('topic', [topicId]);
     const replyIds = replies.map(reply => reply.id);
     const imagesByReply = await this.fetchImagesByEntity('reply', replyIds);
-    
+
     // Format and sort replies hierarchically
     const formattedReplies = replies.map(reply => this.formatReplyResponse(reply, imagesByReply[reply.id] || []));
     const hierarchicalReplies = this.sortRepliesHierarchically(formattedReplies);
-    
+
     // Use hierarchical ordering (user prioritization would break parent-child relationships)
     const finalReplies = hierarchicalReplies;
-    
+
     // Format topic response
     const topic = this.formatTopicResponse(topics[0], topicImages[topicId] || []);
-    
+
     return {
       topic,
       replies: finalReplies,
@@ -312,30 +312,30 @@ class ForumService {
    */
   async createTopic(topicData) {
     const { user_id, title, content, category, images = [] } = topicData;
-    
+
     // Get category ID
     const [categories] = await pool.execute(`
       SELECT id FROM forum_categories WHERE name = ? AND status = 0
     `, [category]);
-    
+
     if (categories.length === 0) {
       throw new Error('Invalid category');
     }
-    
+
     const categoryId = categories[0].id;
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Create topic with status -1 (awaiting review)
       const [result] = await connection.execute(`
         INSERT INTO forum_topics (user_id, category_id, title, content, status)
         VALUES (?, ?, ?, ?, -1)
       `, [user_id, categoryId, title, content]);
-      
+
       const topicId = result.insertId;
-      
+
       // Handle image uploads if provided
       if (images.length > 0) {
         for (const imageUrl of images) {
@@ -348,9 +348,9 @@ class ForumService {
           `, [topicId, dbImageUrl, user_id]);
         }
       }
-      
+
       await connection.commit();
-      
+
       return {
         id: topicId,
         created_at: new Date().toISOString()
@@ -380,62 +380,62 @@ class ForumService {
    */
   async updateTopic(topicId, userId, updates) {
     const { title, content, category, images } = updates;
-    
+
     // Verify ownership - allow editing of user's own topics regardless of status
     const [topics] = await pool.execute(`
       SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0)
     `, [topicId]);
-    
+
     if (topics.length === 0) {
       throw new Error('Topic not found');
     }
-    
+
     if (topics[0].user_id !== userId) {
       throw new Error('Unauthorized: You can only edit your own topics');
     }
-    
+
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Build update query dynamically
       const updateFields = [];
       const updateParams = [];
-      
+
       if (title !== undefined) {
         updateFields.push('title = ?');
         updateParams.push(title);
       }
-      
+
       if (content !== undefined) {
         updateFields.push('content = ?');
         updateParams.push(content);
       }
-      
+
       if (category !== undefined) {
         // Get category ID
         const [categories] = await connection.execute(`
           SELECT id FROM forum_categories WHERE name = ? AND status = 0
         `, [category]);
-        
+
         if (categories.length === 0) {
           throw new Error('Invalid category');
         }
-        
+
         updateFields.push('category_id = ?');
         updateParams.push(categories[0].id);
       }
-      
+
       if (updateFields.length > 0) {
         updateFields.push('updated_at = CURRENT_TIMESTAMP');
         updateParams.push(topicId);
-        
+
         await connection.execute(`
           UPDATE forum_topics SET ${updateFields.join(', ')} WHERE id = ?
         `, updateParams);
       }
-      
+
       // Handle image updates if provided
       if (images !== undefined) {
         // Clear existing images by marking as deleted
@@ -444,7 +444,7 @@ class ForumService {
           SET status = 3
           WHERE entity_type = 'topic' AND entity_id = ?
         `, [topicId]);
-        
+
         // Add new images
         for (const imageUrl of images) {
           // Convert full URL back to database format
@@ -456,9 +456,9 @@ class ForumService {
           `, [topicId, dbImageUrl, userId]);
         }
       }
-      
+
       await connection.commit();
-      
+
       // Return updated topic
       return await this.getTopicById(topicId);
     } catch (error) {
@@ -484,21 +484,21 @@ class ForumService {
     const [topics] = await pool.execute(`
       SELECT user_id FROM forum_topics WHERE id = ? AND status IN (-1, 0)
     `, [topicId]);
-    
+
     if (topics.length === 0) {
       throw new Error('Topic not found');
     }
-    
+
     if (topics[0].user_id !== userId) {
       throw new Error('Unauthorized: You can only delete your own topics');
     }
-    
+
     // Soft delete by setting status to 1
     await pool.execute(`
       UPDATE forum_topics SET status = 1, updated_at = CURRENT_TIMESTAMP 
       WHERE id = ?
     `, [topicId]);
-    
+
     return true;
   }
 
@@ -519,20 +519,20 @@ class ForumService {
   async getReplies(topicId, filters = {}) {
     const { page = 1, limit = 20, sort = 'newest', user_id } = filters;
     const offset = (page - 1) * limit;
-    
+
     // Build WHERE clause for user-specific content
     let whereClause = 'WHERE r.topic_id = ?';
     let queryParams = [topicId];
-    
+
     if (user_id) {
-      // Include user's own under-review replies AND all published replies
-      whereClause += ' AND (r.status = 0 OR (r.status = -1 AND r.user_id = ?))';
+      // Include user's own under-review/rejected replies AND all published replies
+      whereClause += ' AND (r.status = 0 OR ((r.status = -1 OR r.status = 2) AND r.user_id = ?))';
       queryParams.push(user_id);
     } else {
       // Only published replies
       whereClause += ' AND r.status = 0';
     }
-    
+
     // Build sort clause with user prioritization
     let sortClause;
     if (user_id) {
@@ -554,7 +554,7 @@ class ForumService {
       else if (sort === 'popular') sortClause = 'ORDER BY r.like_count DESC, r.created_at DESC';
       else sortClause = 'ORDER BY r.created_at ASC';
     }
-    
+
     // Get replies with simplified query
     const [replies] = await pool.execute(`
       SELECT r.*, u.username as author_name, u.id as author_id, u.status as author_status
@@ -564,23 +564,23 @@ class ForumService {
       ${sortClause}
       LIMIT ? OFFSET ?
     `, [...queryParams, limit, offset]);
-    
+
     // Get total count with same WHERE clause
     const countParams = user_id ? [topicId, user_id] : [topicId];
     const [countResult] = await pool.execute(`
       SELECT COUNT(*) as total FROM forum_replies r
       ${whereClause}
     `, countParams);
-    
+
     const totalItems = countResult[0].total;
-    
+
     // Fetch images for all replies
     const replyIds = replies.map(reply => reply.id);
     const imagesByReply = await this.fetchImagesByEntity('reply', replyIds);
-    
+
     const formattedReplies = replies.map(reply => this.formatReplyResponse(reply, imagesByReply[reply.id] || []));
     const pagination = this.buildPagination(page, limit, totalItems);
-    
+
     return {
       replies: formattedReplies,
       pagination
@@ -603,45 +603,45 @@ class ForumService {
    */
   async createReply(replyData) {
     const { topic_id, user_id, content, parent_reply_id = null, images = [] } = replyData;
-    
+
     // Verify topic exists and is not deleted
     const [topics] = await pool.execute(`
       SELECT id FROM forum_topics WHERE id = ? AND status = 0
     `, [topic_id]);
-    
+
     if (topics.length === 0) {
       throw new Error('Topic not found or closed');
     }
-    
+
     // If parent_reply_id is provided, verify parent reply exists and belongs to same topic
     if (parent_reply_id) {
       const [parentReplies] = await pool.execute(`
         SELECT id, topic_id FROM forum_replies 
         WHERE id = ? AND status = 0
       `, [parent_reply_id]);
-      
+
       if (parentReplies.length === 0) {
         throw new Error('Parent reply not found or deleted');
       }
-      
+
       if (parentReplies[0].topic_id !== topic_id) {
         throw new Error('Parent reply must belong to the same topic');
       }
     }
-    
+
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Create reply with status -1 (awaiting review)
       const [result] = await connection.execute(`
         INSERT INTO forum_replies (topic_id, user_id, parent_reply_id, content, status)
         VALUES (?, ?, ?, ?, -1)
       `, [topic_id, user_id, parent_reply_id, content]);
-      
+
       const replyId = result.insertId;
-      
+
       // Handle image uploads if provided
       if (images.length > 0) {
         for (const imageUrl of images) {
@@ -654,9 +654,9 @@ class ForumService {
           `, [replyId, dbImageUrl, user_id]);
         }
       }
-      
+
       await connection.commit();
-      
+
       return {
         id: replyId,
         created_at: new Date().toISOString()
@@ -684,25 +684,25 @@ class ForumService {
    */
   async updateReply(replyId, userId, updates) {
     const { content, images } = updates;
-    
+
     // Verify ownership - allow editing of user's own replies regardless of status
     const [replies] = await pool.execute(`
       SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0)
     `, [replyId]);
-    
+
     if (replies.length === 0) {
       throw new Error('Reply not found');
     }
-    
+
     if (replies[0].user_id !== userId) {
       throw new Error('Unauthorized: You can only edit your own replies');
     }
-    
+
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Update content if provided
       if (content !== undefined) {
         await connection.execute(`
@@ -710,7 +710,7 @@ class ForumService {
           WHERE id = ?
         `, [content, replyId]);
       }
-      
+
       // Handle image updates if provided
       if (images !== undefined) {
         // Clear existing images by marking as deleted
@@ -719,7 +719,7 @@ class ForumService {
           SET status = 3
           WHERE entity_type = 'reply' AND entity_id = ?
         `, [replyId]);
-        
+
         // Add new images
         for (const imageUrl of images) {
           // Convert full URL back to database format
@@ -731,9 +731,9 @@ class ForumService {
           `, [replyId, dbImageUrl, userId]);
         }
       }
-      
+
       await connection.commit();
-      
+
       // Return updated reply
       const [updatedReply] = await connection.execute(`
         SELECT r.*, u.username as author_name, u.id as author_id, u.status as author_status
@@ -741,7 +741,7 @@ class ForumService {
         JOIN users u ON r.user_id = u.id AND u.status >= 0
         WHERE r.id = ?
       `, [replyId]);
-      
+
       return this.formatReplyResponse(updatedReply[0]);
     } catch (error) {
       await connection.rollback();
@@ -766,21 +766,21 @@ class ForumService {
     const [replies] = await pool.execute(`
       SELECT user_id FROM forum_replies WHERE id = ? AND status IN (-1, 0)
     `, [replyId]);
-    
+
     if (replies.length === 0) {
       throw new Error('Reply not found');
     }
-    
+
     if (replies[0].user_id !== userId) {
       throw new Error('Unauthorized: You can only delete your own replies');
     }
-    
+
     // Soft delete by setting status to 1
     await pool.execute(`
       UPDATE forum_replies SET status = 1, updated_at = CURRENT_TIMESTAMP 
       WHERE id = ?
     `, [replyId]);
-    
+
     return true;
   }
 
@@ -796,17 +796,17 @@ class ForumService {
    */
   async toggleTopicLike(topicId, userId) {
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Check if already liked
       const [existingLike] = await connection.execute(`
         SELECT id FROM forum_topic_likes WHERE topic_id = ? AND user_id = ?
       `, [topicId, userId]);
-      
+
       let isLiked;
-      
+
       if (existingLike.length > 0) {
         // Remove like
         await connection.execute(`
@@ -820,14 +820,14 @@ class ForumService {
         `, [topicId, userId]);
         isLiked = true;
       }
-      
+
       // Get updated like count
       const [topicData] = await connection.execute(`
         SELECT like_count FROM forum_topics WHERE id = ?
       `, [topicId]);
-      
+
       await connection.commit();
-      
+
       return {
         is_liked: isLiked,
         like_count: topicData[0].like_count
@@ -852,17 +852,17 @@ class ForumService {
    */
   async toggleReplyLike(replyId, userId) {
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Check if already liked
       const [existingLike] = await connection.execute(`
         SELECT id FROM forum_reply_likes WHERE reply_id = ? AND user_id = ?
       `, [replyId, userId]);
-      
+
       let isLiked;
-      
+
       if (existingLike.length > 0) {
         // Remove like
         await connection.execute(`
@@ -876,14 +876,14 @@ class ForumService {
         `, [replyId, userId]);
         isLiked = true;
       }
-      
+
       // Get updated like count
       const [replyData] = await connection.execute(`
         SELECT like_count FROM forum_replies WHERE id = ?
       `, [replyId]);
-      
+
       await connection.commit();
-      
+
       return {
         is_liked: isLiked,
         like_count: replyData[0].like_count
@@ -913,10 +913,10 @@ class ForumService {
   async searchContent(query, filters = {}) {
     const { type = 'all', category, page = 1, limit = 20 } = filters;
     const offset = (page - 1) * limit;
-    
+
     let searchQuery = '';
     const params = [];
-    
+
     // Build search query based on type
     if (type === 'topics' || type === 'all') {
       searchQuery += `
@@ -929,7 +929,7 @@ class ForumService {
         JOIN users u ON t.user_id = u.id AND u.status >= 0
         WHERE t.status = 0 AND (t.title LIKE ? OR t.content LIKE ?)
       `;
-      
+
       if (category) {
         searchQuery += ' AND c.name = ?';
         params.push(`%${query}%`, `%${query}%`, category);
@@ -937,10 +937,10 @@ class ForumService {
         params.push(`%${query}%`, `%${query}%`);
       }
     }
-    
+
     if (type === 'replies' || type === 'all') {
       if (searchQuery) searchQuery += ' UNION ALL ';
-      
+
       searchQuery += `
         SELECT r.id, 'reply' as type, NULL as title, r.content, c.name as category,
                u.username as author_name, u.id as author_id, r.topic_id,
@@ -952,7 +952,7 @@ class ForumService {
         JOIN users u ON r.user_id = u.id AND u.status >= 0
         WHERE r.status = 0 AND r.content LIKE ?
       `;
-      
+
       if (category) {
         searchQuery += ' AND c.name = ?';
         params.push(`%${query}%`, category);
@@ -960,17 +960,17 @@ class ForumService {
         params.push(`%${query}%`);
       }
     }
-    
+
     // Add ordering and pagination
     searchQuery += ' ORDER BY relevance_score DESC, created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
-    
+
     // Execute search
     const [results] = await pool.execute(searchQuery, params);
-    
+
     // Get total count (simplified for demo)
     const totalItems = results.length; // In production, run separate count query
-    
+
     // Format results
     const formattedResults = results.map(result => ({
       id: result.id,
@@ -989,9 +989,9 @@ class ForumService {
       created_at: result.created_at,
       updated_at: result.updated_at
     }));
-    
+
     const pagination = this.buildPagination(page, limit, totalItems);
-    
+
     return {
       results: formattedResults,
       pagination,
@@ -1022,7 +1022,7 @@ class ForumService {
       GROUP BY c.id, c.name, c.description, c.icon
       ORDER BY c.sort_order, c.name
     `);
-    
+
     return categories;
   }
 
@@ -1041,7 +1041,7 @@ class ForumService {
    */
   async getDrafts(userId, filters = {}) {
     const { type } = filters;
-    
+
     // Get topic draft (only one per user)
     let topicDraft = null;
     if (!type || type === 'topic') {
@@ -1051,10 +1051,10 @@ class ForumService {
         LEFT JOIN forum_categories c ON d.category_id = c.id
         WHERE d.user_id = ? AND d.type = 'topic'
       `, [userId]);
-      
+
       topicDraft = topicDrafts.length > 0 ? topicDrafts[0] : null;
     }
-    
+
     // Get reply drafts
     let replyDrafts = [];
     if (!type || type === 'reply') {
@@ -1065,10 +1065,10 @@ class ForumService {
         WHERE d.user_id = ? AND d.type = 'reply'
         ORDER BY d.updated_at DESC
       `, [userId]);
-      
+
       replyDrafts = drafts;
     }
-    
+
     return {
       topic_draft: topicDraft,
       reply_drafts: replyDrafts
@@ -1092,23 +1092,23 @@ class ForumService {
    */
   async saveDraft(draftData) {
     const { user_id, type, title, content, category, topic_id } = draftData;
-    
+
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
-      
+
       let categoryId = null;
       if (type === 'topic' && category) {
         const [categories] = await connection.execute(`
           SELECT id FROM forum_categories WHERE name = ? AND status = 0
         `, [category]);
-        
+
         if (categories.length > 0) {
           categoryId = categories[0].id;
         }
       }
-      
+
       // Use INSERT ... ON DUPLICATE KEY UPDATE for upsert
       const [result] = await connection.execute(`
         INSERT INTO forum_drafts (user_id, type, topic_id, title, content, category_id)
@@ -1119,9 +1119,9 @@ class ForumService {
         category_id = VALUES(category_id),
         updated_at = CURRENT_TIMESTAMP
       `, [user_id, type, topic_id, title, content, categoryId]);
-      
+
       await connection.commit();
-      
+
       return {
         id: result.insertId || result.affectedRows,
         user_id,
@@ -1155,11 +1155,11 @@ class ForumService {
     const [result] = await pool.execute(`
       DELETE FROM forum_drafts WHERE id = ? AND user_id = ?
     `, [draftId, userId]);
-    
+
     if (result.affectedRows === 0) {
       throw new Error('Draft not found or unauthorized');
     }
-    
+
     return true;
   }
 
@@ -1178,29 +1178,29 @@ class ForumService {
       JOIN forum_categories c ON t.category_id = c.id
       JOIN users u ON t.user_id = u.id AND u.status >= 0
     `;
-    
+
     const params = [];
-    
+
     // Build WHERE clause for user-specific content
     if (user_id) {
       // Include user's own under-review topics AND all published topics
-      query += ' WHERE (t.status = 0 OR (t.status = -1 AND t.user_id = ?))';
+      query += ' WHERE (t.status = 0 OR ((t.status = -1 or t.status = 2) AND t.user_id = ?))';
       params.push(user_id);
     } else {
       // Only published topics
       query += ' WHERE t.status = 0';
     }
-    
+
     if (category) {
       query += ' AND c.name = ?';
       params.push(category);
     }
-    
+
     if (search) {
       query += ' AND (t.title LIKE ? OR t.content LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
-    
+
     // Add sorting with user prioritization
     if (user_id) {
       // Prioritize user's content at top, then apply normal sorting
@@ -1234,10 +1234,10 @@ class ForumService {
           query += ' ORDER BY t.created_at DESC';
       }
     }
-    
+
     query += ' LIMIT ? OFFSET ?';
     params.push(limit, offset);
-    
+
     return { query, params };
   }
 
@@ -1307,7 +1307,7 @@ class ForumService {
    */
   buildPagination(page, limit, totalItems) {
     const totalPages = Math.ceil(totalItems / limit);
-    
+
     return {
       current_page: page,
       total_pages: totalPages,

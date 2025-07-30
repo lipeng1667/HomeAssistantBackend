@@ -48,7 +48,7 @@ router.use(validateAppAuth, authenticateAdmin);
  */
 router.get('/review-queue', async (req, res) => {
   try {
-    const { type = 'all', page = 1, limit = 20, sort = 'newest' } = req.query;
+    const { type = 'all', page = 1, limit = 20, sort = 'oldest' } = req.query;
     const offset = (parseInt(page) - 1) * Math.min(parseInt(limit), 50);
     const actualLimit = Math.min(parseInt(limit), 50);
 
@@ -68,7 +68,7 @@ router.get('/review-queue', async (req, res) => {
         JOIN forum_categories c ON t.category_id = c.id
         WHERE t.status = -1
       `;
-      
+
       countQuery += `
         SELECT COUNT(*) as count FROM forum_topics t
         JOIN users u ON t.user_id = u.id AND u.status >= 0
@@ -81,7 +81,7 @@ router.get('/review-queue', async (req, res) => {
         query += ' UNION ALL ';
         countQuery += ' UNION ALL ';
       }
-      
+
       query += `
         SELECT 
           r.id, 'reply' as type, NULL as title, r.content, r.user_id, r.created_at, r.updated_at,
@@ -93,7 +93,7 @@ router.get('/review-queue', async (req, res) => {
         JOIN forum_categories c ON t.category_id = c.id
         WHERE r.status = -1
       `;
-      
+
       countQuery += `
         SELECT COUNT(*) as count FROM forum_replies r
         JOIN users u ON r.user_id = u.id AND u.status >= 0
@@ -108,7 +108,7 @@ router.get('/review-queue', async (req, res) => {
 
     // Execute queries
     const [posts] = await pool.execute(query, params);
-    
+
     // Get total count
     let totalCount = 0;
     if (type === 'all') {
@@ -247,7 +247,7 @@ router.post('/moderate', async (req, res) => {
         target_id: contentId,
         target_user_id: targetContent.user_id,
         reason: reason || null,
-        content_preview: targetContent.content_text ? 
+        content_preview: targetContent.content_text ?
           targetContent.content_text.substring(0, 100) + '...' : null,
         ip_address: req.ip,
         endpoint: req.path
@@ -345,7 +345,7 @@ router.post('/moderate/bulk', async (req, res) => {
       for (const item of items) {
         try {
           const { type, id } = item;
-          
+
           if (!['topic', 'reply'].includes(type) || !id) {
             results.failed.push({ ...item, error: 'Invalid item format' });
             continue;
@@ -436,7 +436,7 @@ router.post('/moderate/bulk', async (req, res) => {
 router.get('/analytics', async (req, res) => {
   try {
     const { period = 'week' } = req.query;
-    
+
     // Determine date filter
     let dateFilter = '';
     switch (period) {
@@ -638,7 +638,7 @@ router.get('/users/:userId/posts', async (req, res) => {
         JOIN forum_categories c ON t.category_id = c.id
         WHERE t.user_id = ? ${statusFilter}
       `;
-      
+
       countQuery += `
         SELECT COUNT(*) as count FROM forum_topics t
         WHERE t.user_id = ? ${statusFilter}
@@ -650,7 +650,7 @@ router.get('/users/:userId/posts', async (req, res) => {
         query += ' UNION ALL ';
         countQuery += ' UNION ALL ';
       }
-      
+
       query += `
         SELECT 
           r.id, 'reply' as type, NULL as title, r.content, r.status, r.like_count,
@@ -660,7 +660,7 @@ router.get('/users/:userId/posts', async (req, res) => {
         JOIN forum_categories c ON t.category_id = c.id
         WHERE r.user_id = ? ${statusFilter}
       `;
-      
+
       countQuery += `
         SELECT COUNT(*) as count FROM forum_replies r
         WHERE r.user_id = ? ${statusFilter}
@@ -668,13 +668,13 @@ router.get('/users/:userId/posts', async (req, res) => {
     }
 
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    
+
     const queryParams = type === 'all' ? [userId, userId, actualLimit, offset] : [userId, actualLimit, offset];
     const countParams = type === 'all' ? [userId, userId] : [userId];
 
     // Execute queries
     const [posts] = await pool.execute(query, queryParams);
-    
+
     // Get total count
     let totalCount = 0;
     if (type === 'all') {
