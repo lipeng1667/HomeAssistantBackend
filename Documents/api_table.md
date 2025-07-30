@@ -77,11 +77,12 @@ This document provides a detailed reference for the Home Assistant Backend API.
 
 | Method | Endpoint                               | Description                       |Done|
 | ------ | -------------------------------------- | --------------------------------- |----|
-| GET    | `/admin/forum/review-queue`            | Get posts awaiting moderation     | 📝 |
-| POST   | `/admin/forum/moderate`                | Moderate single post (approve/reject) | 📝 |
-| POST   | `/admin/forum/moderate/bulk`           | Bulk moderation actions           | 📝 |
-| GET    | `/admin/forum/analytics`               | Forum analytics and statistics    | 📝 |
-| GET    | `/admin/forum/stats`                   | Real-time forum dashboard stats   | 📝 |
+| GET    | `/admin/forum/review-queue`            | Get posts awaiting moderation     | ✅ |
+| POST   | `/admin/forum/moderate`                | Moderate single post (approve/reject) | ✅ |
+| POST   | `/admin/forum/moderate/bulk`           | Bulk moderation actions           | ✅ |
+| GET    | `/admin/forum/analytics`               | Forum analytics and statistics    | ✅ |
+| GET    | `/admin/forum/stats`                   | Real-time forum dashboard stats   | ✅ |
+| GET    | `/admin/forum/users/:userId/posts`     | Admin user activity review        | ✅ |
 
 ---
 

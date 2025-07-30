@@ -79,7 +79,7 @@ const localhostOnly = (req, res, next) => {
  * @description Middleware for Redis-based user session authentication
  * @async
  * @function authenticateUser
- * @param {Object} req - Express request object with user_id in body
+ * @param {Object} req - Express request object with user_id in query or body
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  * @returns {void} Calls next() on success or sends error response
@@ -98,7 +98,10 @@ const localhostOnly = (req, res, next) => {
  * // Apply to protected routes
  * router.get('/forum/questions', authenticateUser, getQuestions)
  * 
- * // Client request body must include:
+ * // For GET requests, user_id as query parameter:
+ * // GET /api/endpoint?user_id=123
+ * 
+ * // For POST requests, user_id in request body:
  * {
  *   "user_id": 123,
  *   "other": "data"
@@ -106,8 +109,8 @@ const localhostOnly = (req, res, next) => {
  */
 const authenticateUser = async (req, res, next) => {
   try {
-    // Get user_id from request body
-    const { user_id } = req.body;
+    // Get user_id from query params (for GET requests) or request body (for POST requests)
+    const user_id = req.query.user_id || req.body.user_id;
 
     if (!user_id) {
       return res.status(400).json({

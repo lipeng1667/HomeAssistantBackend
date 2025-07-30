@@ -17,7 +17,7 @@ All forum admin endpoints require:
 |------------------|------|-------------|----------|
 | `X-Timestamp` | Header | Unix timestamp (ms) for signature | Yes |
 | `X-Signature` | Header | HMAC-SHA256(app_secret, timestamp) | Yes |
-| `user_id` | Body | Admin user ID for session validation | Yes |
+| `user_id` | Query/Body | Admin user ID for session validation | Yes |
 | `X-Session-Token` | Header | Optional session token for enhanced security | No |
 
 **Authentication Flow:**
@@ -27,6 +27,8 @@ All forum admin endpoints require:
 3. **Admin Check**: Session `user_status` field must equal "87"
 4. **Token Validation**: If `X-Session-Token` provided, must match session token
 5. **Audit Logging**: All admin access attempts logged for security
+
+**Note**: For GET requests, `user_id` should be passed as a query parameter. For POST requests, `user_id` is passed in the request body.
 
 **Enhanced Login Response:**
 
@@ -83,6 +85,7 @@ Get all posts awaiting moderation (status = -1) for admin review.
 
 | Name | Type | Description | Required | Default |
 |------|------|-------------|----------|---------|
+| `user_id` | Integer | Admin user ID for authentication | Yes | - |
 | `page` | Integer | Page number (1-based) | No | 1 |
 | `limit` | Integer | Items per page (1-100) | No | 20 |
 | `type` | String | Filter: "topic", "reply", "all" | No | "all" |
@@ -92,12 +95,10 @@ Get all posts awaiting moderation (status = -1) for admin review.
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/admin/forum/review-queue?page=1&limit=50&type=topic" \
-  -H "Content-Type: application/json" \
+curl -X GET "http://localhost:10000/admin/forum/review-queue?user_id=123&page=1&limit=50&type=topic" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..." \
-  -H "X-Session-Token: optional-uuid-token" \
-  -d '{"user_id": 123}'
+  -H "X-Session-Token: optional-uuid-token"
 ```
 
 **Response Structure:**
@@ -376,18 +377,17 @@ Get comprehensive forum analytics and moderation statistics for admin dashboard.
 
 | Name | Type | Description | Required | Default |
 |------|------|-------------|----------|---------|
+| `user_id` | Integer | Admin user ID for authentication | Yes | - |
 | `period` | String | "today", "week", "month", "all" | No | "week" |
 | `metrics` | String | Comma-separated: "moderation,engagement,users" | No | "all" |
 
 **Example Request:**
 
 ```bash
-curl -X GET "http://localhost:10000/admin/forum/analytics?period=week&metrics=moderation,engagement" \
-  -H "Content-Type: application/json" \
+curl -X GET "http://localhost:10000/admin/forum/analytics?user_id=123&period=week&metrics=moderation,engagement" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..." \
-  -H "X-Session-Token: optional-uuid-token" \
-  -d '{"user_id": 123}'
+  -H "X-Session-Token: optional-uuid-token"
 ```
 
 **Example Response:**
@@ -442,17 +442,19 @@ Get real-time forum statistics for admin dashboard widgets and notifications.
 
 **Admin Authentication:** Required (status = 87)
 
-**Parameters:** None
+**Query Parameters:**
+
+| Name | Type | Description | Required |
+|------|------|-------------|----------|
+| `user_id` | Integer | Admin user ID for authentication | Yes |
 
 **Example Request:**
 
 ```bash
-curl -X GET http://localhost:10000/admin/forum/stats \
-  -H "Content-Type: application/json" \
+curl -X GET "http://localhost:10000/admin/forum/stats?user_id=123" \
   -H "X-Timestamp: 1672531200000" \
   -H "X-Signature: a1b2c3d4e5f6..." \
-  -H "X-Session-Token: optional-uuid-token" \
-  -d '{"user_id": 123}'
+  -H "X-Session-Token: optional-uuid-token"
 ```
 
 **Example Response:**

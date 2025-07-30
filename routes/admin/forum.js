@@ -30,10 +30,11 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/database');
 const { authenticateAdmin, logAdminAction } = require('../../middleware/adminAuth');
+const { validateAppAuth } = require('../../middleware/appAuth');
 const forumService = require('../../services/forumService');
 
-// Apply admin authentication to all forum admin routes
-router.use(authenticateAdmin);
+// Apply app-level authentication and admin authentication to all forum admin routes
+router.use(validateAppAuth, authenticateAdmin);
 
 /**
  * @description Get forum review queue (posts with status = -1)

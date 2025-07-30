@@ -88,6 +88,7 @@ const forumRoutes = require('./routes/forum')
 const chatRoutes = require('./routes/chat')
 const logRoutes = require('./routes/logs')
 const healthRoutes = require('./routes/health')
+const adminRoutes = require('./routes/admin/index')
 
 // Import Socket.io service
 const socketService = require('./services/socketService')
@@ -304,6 +305,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/forum', forumRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/logs', logRoutes)
+app.use('/admin', adminRoutes)
 
 // 404 handler
 app.use(notFoundHandler)

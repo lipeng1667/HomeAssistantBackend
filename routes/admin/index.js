@@ -23,8 +23,10 @@ const express = require('express');
 const router = express.Router();
 const { requireAdmin, enhanceAdminContext } = require('../../middleware/adminAuth');
 const { authenticateUser } = require('../../middleware/userAuth');
+const { validateAppAuth } = require('../../middleware/appAuth');
 
-// Apply authentication and admin context enhancement to all admin routes
+// Apply app-level authentication, user authentication and admin context enhancement to all admin routes
+router.use(validateAppAuth);
 router.use(authenticateUser);
 router.use(enhanceAdminContext);
 router.use(requireAdmin);
