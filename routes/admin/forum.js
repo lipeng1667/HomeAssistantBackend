@@ -109,6 +109,29 @@ router.get('/review-queue', async (req, res) => {
     // Execute queries
     const [posts] = await pool.execute(query, params);
 
+    // Fetch images for all posts
+    const topicIds = posts.filter(post => post.type === 'topic').map(post => post.id);
+    const replyIds = posts.filter(post => post.type === 'reply').map(post => post.id);
+    
+    // Fetch images using forumService method
+    const imagesByTopic = topicIds.length > 0 ? await forumService.fetchImagesByEntity('topic', topicIds) : {};
+    const imagesByReply = replyIds.length > 0 ? await forumService.fetchImagesByEntity('reply', replyIds) : {};
+
+    // Add images to posts
+    const postsWithImages = posts.map(post => {
+      let images = [];
+      if (post.type === 'topic' && imagesByTopic[post.id]) {
+        images = imagesByTopic[post.id].map(img => img.url);
+      } else if (post.type === 'reply' && imagesByReply[post.id]) {
+        images = imagesByReply[post.id].map(img => img.url);
+      }
+      
+      return {
+        ...post,
+        images
+      };
+    });
+
     // Get total count
     let totalCount = 0;
     if (type === 'all') {
@@ -142,7 +165,7 @@ router.get('/review-queue', async (req, res) => {
     res.json({
       status: 'success',
       data: {
-        posts,
+        posts: postsWithImages,
         pagination: {
           current_page: parseInt(page),
           total_pages: totalPages,

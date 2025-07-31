@@ -107,9 +107,9 @@ curl -X GET "http://localhost:10000/admin/forum/review-queue?user_id=123&page=1&
 |-------|------|-------------|
 | `status` | String | Request status ("success" or "error") |
 | `data` | Object | Response data container |
-| `data.pending_items` | Array | Array of items awaiting review |
+| `data.posts` | Array | Array of posts awaiting review |
 | `data.pagination` | Object | Pagination information |
-| `data.stats` | Object | Queue statistics |
+| `data.queue_stats` | Object | Queue statistics |
 
 **Response Error Codes:**
 
@@ -128,34 +128,39 @@ curl -X GET "http://localhost:10000/admin/forum/review-queue?user_id=123&page=1&
 {
   "status": "success",
   "data": {
-    "pending_items": [
+    "posts": [
       {
         "id": 123,
         "type": "topic",
         "title": "Smart Home Automation Tips",
         "content": "Here are some great tips for...",
-        "author": {
-          "id": 45,
-          "name": "user123",
-          "role": "user"
-        },
+        "user_id": 45,
+        "author_name": "user123",
         "category": "Smart Home",
+        "topic_id": null,
+        "parent_reply_id": null,
+        "images": [
+          "http://47.94.108.189/uploads/topic_123_image1.jpg",
+          "http://47.94.108.189/uploads/topic_123_image2.jpg"
+        ],
         "created_at": "2025-01-15T10:30:00Z",
-        "priority": "normal"
+        "updated_at": "2025-01-15T10:30:00Z"
       },
       {
         "id": 89,
         "type": "reply",
+        "title": null,
         "content": "Great post! I also recommend...",
+        "user_id": 32,
+        "author_name": "homeowner99",
+        "category": "Security",
         "topic_id": 67,
-        "topic_title": "Home Security Systems",
-        "author": {
-          "id": 32,
-          "name": "homeowner99",
-          "role": "user"
-        },
+        "parent_reply_id": null,
+        "images": [
+          "http://47.94.108.189/uploads/reply_89_screenshot.png"
+        ],
         "created_at": "2025-01-15T09:15:00Z",
-        "priority": "normal"
+        "updated_at": "2025-01-15T09:15:00Z"
       }
     ],
     "pagination": {
@@ -165,11 +170,9 @@ curl -X GET "http://localhost:10000/admin/forum/review-queue?user_id=123&page=1&
       "has_next": true,
       "has_previous": false
     },
-    "stats": {
+    "queue_stats": {
       "total_pending": 47,
-      "topics_pending": 23,
-      "replies_pending": 24,
-      "average_wait_time_hours": 2.5
+      "type_filter": "all"
     }
   }
 }
