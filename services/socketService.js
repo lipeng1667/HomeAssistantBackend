@@ -153,12 +153,13 @@ class SocketService {
   handleConnection(socket) {
     const userId = socket.userId;
     const userInfo = socket.userInfo;
+    const isAdmin = userInfo.status === 87;
 
-    console.log(`🔗 User ${userId} (${userInfo.username}) connected via WebSocket`);
+    console.log(`🔗 User ${userId} (${userInfo.username}) connected via WebSocket${isAdmin ? ' [ADMIN]' : ''}`);
 
     // Track connected user
     this.connectedUsers.set(userId, socket.id);
-    this.socketUsers.set(socket.id, userId);
+    this.socketUsers.set(socket.id, { userId, isAdmin });
 
     // Update WebSocket metrics
     if (global.metricsService) {
@@ -168,20 +169,32 @@ class SocketService {
       console.warn('⚠️ global.metricsService not available for WebSocket metrics');
     }
 
-    // Join user's conversations
-    this.joinUserConversations(socket, userId);
+    // Join user's conversations or admin rooms
+    if (isAdmin) {
+      this.joinAdminRooms(socket, userId);
+    } else {
+      this.joinUserConversations(socket, userId);
+    }
 
     // Handle events
     socket.on('join_conversation', (data) => this.handleJoinConversation(socket, data));
     socket.on('send_message', (data) => this.handleSendMessage(socket, data));
     socket.on('typing_start', (data) => this.handleTypingIndicator(socket, data, true));
     socket.on('typing_stop', (data) => this.handleTypingIndicator(socket, data, false));
+    
+    // Admin-specific events
+    if (isAdmin) {
+      socket.on('join_admin_rooms', (data) => this.handleJoinAdminRooms(socket, data));
+      socket.on('admin_assign_conversation', (data) => this.handleAdminAssignConversation(socket, data));
+    }
+    
     socket.on('disconnect', () => this.handleDisconnect(socket));
 
     // Send connection success
     socket.emit('connected', {
       message: 'Successfully connected to chat server',
       user_id: userId,
+      is_admin: isAdmin,
       timestamp: new Date().toISOString()
     });
   }
@@ -398,6 +411,100 @@ class SocketService {
       if (socketId) {
         this.io.to(socketId).emit(event, data);
       }
+    }
+  }
+
+  /**
+   * Join admin rooms for dashboard and notifications
+   * @param {Object} socket - Socket.io socket object
+   * @param {number} adminId - Admin user ID
+   */
+  async joinAdminRooms(socket, adminId) {
+    try {
+      // Join general admin rooms
+      socket.join('admin_dashboard');
+      socket.join('admin_notifications');
+      socket.join(`admin_${adminId}`);
+      
+      console.log(`🔑 Admin ${adminId} joined admin rooms`);
+
+      // Get admin's assigned conversations
+      const [conversations] = await pool.execute(
+        'SELECT id FROM conversations WHERE admin_id = ? AND status IN ("active", "pending")',
+        [adminId]
+      );
+
+      // Join assigned conversation rooms
+      for (const conversation of conversations) {
+        socket.join(`conversation_${conversation.id}`);
+      }
+
+      console.log(`📋 Admin ${adminId} joined ${conversations.length} assigned conversation rooms`);
+    } catch (error) {
+      console.error('Error joining admin rooms:', error);
+    }
+  }
+
+  /**
+   * Handle admin joining specific rooms
+   * @param {Object} socket - Socket.io socket object
+   * @param {Object} data - Room data
+   */
+  handleJoinAdminRooms(socket, data) {
+    if (data.rooms && Array.isArray(data.rooms)) {
+      data.rooms.forEach(room => {
+        socket.join(room);
+        console.log(`🔑 Admin ${socket.userId} joined room: ${room}`);
+      });
+    }
+  }
+
+  /**
+   * Handle admin conversation assignment
+   * @param {Object} socket - Socket.io socket object
+   * @param {Object} data - Assignment data
+   */
+  async handleAdminAssignConversation(socket, data) {
+    try {
+      const { conversation_id, admin_id } = data;
+      
+      // Join the conversation room
+      socket.join(`conversation_${conversation_id}`);
+      
+      // Notify other admins about the assignment
+      this.emitToAdmins('admin_conversation_assigned', {
+        conversation_id,
+        admin_id,
+        assigned_by: socket.userId,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`🎯 Admin ${socket.userId} assigned conversation ${conversation_id} to admin ${admin_id}`);
+    } catch (error) {
+      console.error('Error handling admin conversation assignment:', error);
+    }
+  }
+
+  /**
+   * Emit event to all connected admins
+   * @param {string} event - Event name
+   * @param {Object} data - Event data
+   */
+  emitToAdmins(event, data) {
+    if (this.io) {
+      this.io.to('admin_dashboard').emit(event, data);
+    }
+  }
+
+  /**
+   * Emit event to a specific admin
+   * @param {number} adminId - Admin ID
+   * @param {string} event - Event name
+   * @param {Object} data - Event data
+   */
+  emitToAdmin(adminId, event, data) {
+    if (this.io) {
+      this.io.to(`admin_${adminId}`).emit(event, data);
     }
   }
 

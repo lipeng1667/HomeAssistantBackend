@@ -33,6 +33,7 @@ router.use(requireAdmin);
 
 // Admin route groups
 router.use('/forum', require('./forum'));
+router.use('/chat', require('./chat'));
 // router.use('/users', require('./users'));
 // router.use('/content', require('./content'));
 // router.use('/metrics', require('./metrics'));

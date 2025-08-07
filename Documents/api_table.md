@@ -49,7 +49,6 @@ This document provides a detailed reference for the Home Assistant Backend API.
 | PUT    | `/api/chat/conversations/:id/read` | Mark messages as read                     | 🔄 |
 | POST   | `/api/chat/conversations/:id/typing` | Send typing indicator                   | 🔄 |
 | POST   | `/api/chat/upload`                 | Upload file/image for messaging          | 🔄 |
-| GET    | `/api/chat/search`                 | Search messages in conversations          | 🔄 |
 
 ### WebSocket Events (Real-time)
 
@@ -83,6 +82,17 @@ This document provides a detailed reference for the Home Assistant Backend API.
 | GET    | `/admin/forum/analytics`               | Forum analytics and statistics    | ✅ |
 | GET    | `/admin/forum/stats`                   | Real-time forum dashboard stats   | ✅ |
 | GET    | `/admin/forum/users/:userId/posts`     | Admin user activity review        | ✅ |
+
+- 🛠️ Admin Chat
+
+| Method | Endpoint                                  | Description                          |Done|
+| ------ | ----------------------------------------- | ------------------------------------ |----|
+| GET    | `/admin/chat/dashboard`                   | Admin chat dashboard with statistics | ✅ |
+| GET    | `/admin/chat/conversations`               | List all conversations for admin     | ✅ |
+| GET    | `/admin/chat/conversations/:id`           | Get conversation details             | ✅ |
+| PUT    | `/admin/chat/conversations/:id/assign`    | Assign conversation to admin         | ✅ |
+| PUT    | `/admin/chat/conversations/:id/status`    | Update conversation status/priority  | ✅ |
+| POST   | `/admin/chat/conversations/:id/messages`  | Send message as admin                | ✅ |
 
 ---
 

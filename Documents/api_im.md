@@ -1,43 +1,50 @@
-# IM (Instant Messaging) API Documentation
+# APP : Instant Messaging (IM) API
 
-## Overview
+Handles real-time messaging between users and administrators with WebSocket support for instant communication.
 
-The HomeAssistant IM system provides real-time messaging capabilities between users and administrators. It combines REST API endpoints for basic operations with WebSocket connections for real-time features.
+## GET /api/chat/messages
 
-### Architecture
+Retrieves chat history for the authenticated user's conversation with administrators.
 
-- **Backend**: Node.js + Express + Socket.io + MySQL
-- **Real-time**: WebSocket connections via Socket.io
-- **iOS Client**: Socket.io-Client-Swift + MessageKit
-- **Authentication**: App-level + User-level authentication
-- **File Support**: Integrated with forum upload system
+**App Authentication:** Required (see headers in `api_table.md`)
 
----
+**Request Body Parameters:**
 
-## Current API Endpoints
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `user_id` | Integer | User ID for message history | Yes | - |
 
-### 1. Get Chat History
+**Example Request:**
 
-**Endpoint**: `GET /api/chat/messages`  
-**Authentication**: Required (User)  
-**Description**: Retrieve chat history for the authenticated user
-
-#### Request
-
-```http
-GET /api/chat/messages?user_id=123&page=1&limit=50
-Headers:
-  X-Timestamp: 1673123456789
-  X-Signature: abc123...
+```bash
+curl -X GET "http://localhost:10000/api/chat/messages" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 123}'
 ```
 
-#### Query Parameters
+**Response Structure:**
 
-- `user_id` (required): User ID for authentication
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Messages per page (default: 50, max: 100)
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversation_id` | Integer | Conversation ID |
+| `data.messages` | Array | Array of message objects |
 
-#### Response
+### Message Object Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Integer | Message unique ID |
+| `conversation_id` | Integer | Conversation ID |
+| `sender_role` | String | Message sender ("user" or "admin") |
+| `message` | String | Message content |
+| `timestamp` | String | ISO timestamp of message |
+| `sender_identifier` | String | Sender identifier (user UUID or admin username) |
+
+**Example Response:**
 
 ```json
 {
@@ -49,7 +56,7 @@ Headers:
         "id": 1,
         "conversation_id": 123,
         "sender_role": "user",
-        "content": "Hello, I need help",
+        "message": "Hello, I need help",
         "timestamp": "2025-07-14T10:30:00Z",
         "sender_identifier": "user_uuid_123"
       },
@@ -57,36 +64,50 @@ Headers:
         "id": 2,
         "conversation_id": 123,
         "sender_role": "admin",
-        "content": "How can I help you?",
+        "message": "How can I help you?",
         "timestamp": "2025-07-14T10:31:00Z",
-        "sender_identifier": "admin_1"
+        "sender_identifier": "admin_username"
       }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 50,
-      "total": 2,
-      "pages": 1
-    }
+    ]
   }
 }
 ```
 
-### 2. Send Message
+## POST /api/chat/messages
 
-**Endpoint**: `POST /api/chat/messages`  
-**Authentication**: Required (User)  
-**Description**: Send a message to the conversation
+Sends a message to the conversation with administrators.
 
-#### Request
+**App Authentication:** Required (see headers in `api_table.md`)
 
-```json
-{
-  "message": "Thank you for your help!"
-}
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `message` | String | Message content | Yes | - |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:10000/api/chat/messages" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Thank you for your help!"}'
 ```
 
-#### Response (201 Created)
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.id` | Integer | Message unique ID |
+| `data.conversation_id` | Integer | Conversation ID |
+| `data.message` | String | Message content |
+| `data.sender_role` | String | Always "user" for this endpoint |
+| `data.timestamp` | String | ISO timestamp of message |
+
+**Example Response:**
 
 ```json
 {
@@ -101,23 +122,50 @@ Headers:
 }
 ```
 
----
+## GET /api/chat/conversations
 
-## Enhanced API Endpoints (Proposed)
+Lists all conversations for the authenticated user with pagination support.
 
-### 3. List Conversations
+**App Authentication:** Required (see headers in `api_table.md`)
 
-**Endpoint**: `GET /api/chat/conversations`  
-**Authentication**: Required (User/Admin)  
-**Description**: Get list of conversations for the authenticated user
+**Query Parameters:**
 
-#### Request Parameters
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `page` | Integer | Page number (1-based) | No | 1 |
+| `limit` | Integer | Items per page (1-50) | No | 20 |
+| `status` | String | Filter by status ("active", "closed", "archived") | No | All |
 
-- `page` (optional): Page number (default: 1)
-- `limit` (optional): Items per page (default: 20, max: 50)
-- `status` (optional): Filter by status (active, closed, archived)
+**Example Request:**
 
-#### Response
+```bash
+curl -X GET "http://localhost:10000/api/chat/conversations?page=1&limit=20" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..."
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversations` | Array | Array of conversation objects |
+| `data.pagination` | Object | Pagination information |
+
+### Conversation Object Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Integer | Conversation unique ID |
+| `user_id` | Integer | User ID |
+| `admin_id` | Integer | Assigned admin ID (null if unassigned) |
+| `status` | String | Conversation status |
+| `last_message_at` | String | ISO timestamp of last message |
+| `unread_count` | Integer | Number of unread messages |
+| `last_message` | Object | Last message preview |
+
+**Example Response:**
 
 ```json
 {
@@ -147,21 +195,38 @@ Headers:
 }
 ```
 
-### 4. Create Conversation
+## POST /api/chat/conversations
 
-**Endpoint**: `POST /api/chat/conversations`  
-**Authentication**: Required (User)  
-**Description**: Create a new conversation (if not exists)
+Creates a new conversation with an initial message.
 
-#### Request
+**App Authentication:** Required (see headers in `api_table.md`)
 
-```json
-{
-  "initial_message": "I need help with my account"
-}
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `initial_message` | String | First message to start conversation | Yes | - |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:10000/api/chat/conversations" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -H "Content-Type: application/json" \
+  -d '{"initial_message": "I need help with my account"}'
 ```
 
-#### Response (201 Created)
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversation_id` | Integer | New conversation ID |
+| `data.message` | Object | Initial message details |
+
+**Example Response:**
 
 ```json
 {
@@ -177,21 +242,43 @@ Headers:
 }
 ```
 
-### 5. Mark Messages as Read
+## PUT /api/chat/conversations/:id/read
 
-**Endpoint**: `PUT /api/chat/conversations/:id/read`  
-**Authentication**: Required (User/Admin)  
-**Description**: Mark messages in a conversation as read
+Marks specific messages in a conversation as read.
 
-#### Request
+**App Authentication:** Required (see headers in `api_table.md`)
 
-```json
-{
-  "message_ids": [1, 2, 3]
-}
+**Path Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `id` | Integer | Conversation ID | Yes |
+
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `message_ids` | Array | Array of message IDs to mark as read | Yes | - |
+
+**Example Request:**
+
+```bash
+curl -X PUT "http://localhost:10000/api/chat/conversations/123/read" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -H "Content-Type: application/json" \
+  -d '{"message_ids": [1, 2, 3]}'
 ```
 
-#### Response
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.marked_read` | Integer | Number of messages marked as read |
+
+**Example Response:**
 
 ```json
 {
@@ -202,21 +289,42 @@ Headers:
 }
 ```
 
-### 6. Send Typing Indicator
+## POST /api/chat/conversations/:id/typing
 
-**Endpoint**: `POST /api/chat/conversations/:id/typing`  
-**Authentication**: Required (User/Admin)  
-**Description**: Send typing indicator to conversation
+Sends a typing indicator to notify other participants in the conversation.
 
-#### Request
+**App Authentication:** Required (see headers in `api_table.md`)
 
-```json
-{
-  "typing": true
-}
+**Path Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `id` | Integer | Conversation ID | Yes |
+
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `typing` | Boolean | True if user is typing, false if stopped | Yes | - |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:10000/api/chat/conversations/123/typing" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -H "Content-Type: application/json" \
+  -d '{"typing": true}'
 ```
 
-#### Response
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `message` | String | Confirmation message |
+
+**Example Response:**
 
 ```json
 {
@@ -225,70 +333,475 @@ Headers:
 }
 ```
 
-### 7. Upload File/Image
+## POST /api/chat/upload
 
-**Endpoint**: `POST /api/chat/upload`  
-**Authentication**: Required (User/Admin)  
-**Description**: Upload file or image for messaging
+Uploads files or images for use in messaging.
 
-#### Request (multipart/form-data)
+**App Authentication:** Required (see headers in `api_table.md`)
 
+**Request Body Parameters (multipart/form-data):**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `file` | File | File to upload | Yes | - |
+| `conversation_id` | Integer | Conversation ID | Yes | - |
+| `message_type` | String | Type of message ("image" or "file") | Yes | - |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:10000/api/chat/upload" \
+  -H "X-Timestamp: 1672531200000" \
+  -H "X-Signature: a1b2c3d4e5f6..." \
+  -F "file=@image.jpg" \
+  -F "conversation_id=123" \
+  -F "message_type=image"
 ```
-file: <binary_data>
-conversation_id: 123
-message_type: "image" | "file"
-```
 
-#### Response (201 Created)
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.file_id` | String | Unique file identifier |
+| `data.file_url` | String | Public URL to access file |
+| `data.message_id` | Integer | Created message ID |
+
+**Example Response:**
 
 ```json
 {
   "status": "success",
   "data": {
-    "file_id": "abc123",
-    "file_url": "http://47.94.108.189/uploads/chat/2025/07/14/abc123.jpg",
-    "filename": "image.jpg",
-    "file_size": 1024000,
-    "mime_type": "image/jpeg"
+    "file_id": "upload_abc123",
+    "file_url": "https://cdn.example.com/files/abc123.jpg",
+    "message_id": 25
   }
 }
 ```
 
-### 8. Search Messages
+---
 
-**Endpoint**: `GET /api/chat/search`  
-**Authentication**: Required (User/Admin)  
-**Description**: Search messages in conversations
+# ADMIN : Chat Management API
 
-#### Request Parameters
+Handles chat administration, conversation management, and admin-to-user messaging.
 
-- `q`: Search query (required, min 2 characters)
-- `conversation_id` (optional): Limit search to specific conversation
-- `page` (optional): Page number
-- `limit` (optional): Items per page
+## GET /admin/chat/dashboard
 
-#### Response
+Retrieves dashboard statistics and overview for admin chat management.
+
+**Admin Authentication:** Required (Admin status = 87)
+
+**Query Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `admin_id` | Integer | Specific admin ID for personalized data | No | Current admin |
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:10000/admin/chat/dashboard" \
+  -H "Authorization: Bearer admin_token_here"
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Dashboard data |
+| `data.summary` | Object | Overview statistics |
+| `data.recent_activity` | Array | Recent conversation activity |
+| `data.my_assignments` | Array | Conversations assigned to current admin |
+
+**Example Response:**
 
 ```json
 {
   "status": "success",
   "data": {
-    "results": [
+    "summary": {
+      "total_conversations": 156,
+      "active_conversations": 23,
+      "unread_conversations": 8,
+      "assigned_to_me": 12,
+      "unassigned": 4,
+      "closed_today": 15,
+      "avg_response_time": "4.2 minutes"
+    },
+    "recent_activity": [
       {
-        "message_id": 123,
-        "conversation_id": 456,
-        "content": "I need help with my account",
-        "sender_role": "user",
-        "timestamp": "2025-07-14T10:35:00Z",
-        "context": "...help with my account..."
+        "conversation_id": 145,
+        "user_name": "Jane Doe",
+        "last_message": "Thank you for the quick response!",
+        "timestamp": "2025-07-14T11:25:00Z",
+        "status": "active"
+      }
+    ],
+    "my_assignments": [
+      {
+        "conversation_id": 123,
+        "user_name": "John Smith",
+        "priority": "high",
+        "unread_count": 2,
+        "last_activity": "2025-07-14T10:32:00Z"
+      }
+    ]
+  }
+}
+```
+
+## GET /admin/chat/conversations
+
+Lists all conversations across all users for admin management with advanced filtering.
+
+**Admin Authentication:** Required (Admin status = 87)
+
+**Query Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `page` | Integer | Page number (1-based) | No | 1 |
+| `limit` | Integer | Items per page (1-100) | No | 20 |
+| `status` | String | Filter by status | No | All |
+| `assigned_admin` | Integer | Filter by assigned admin ID | No | All |
+| `user_id` | Integer | Filter by specific user ID | No | All |
+| `unread_only` | Boolean | Show only conversations with unread messages | No | false |
+| `sort` | String | Sort order ("newest", "oldest", "last_activity") | No | "newest" |
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:10000/admin/chat/conversations?unread_only=true&sort=last_activity" \
+  -H "Authorization: Bearer admin_token_here"
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversations` | Array | Array of detailed conversation objects |
+| `data.pagination` | Object | Pagination information |
+| `data.summary` | Object | Summary statistics |
+
+### Admin Conversation Object Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Integer | Conversation unique ID |
+| `user_id` | Integer | User ID |
+| `user_info` | Object | User information |
+| `admin_id` | Integer | Assigned admin ID |
+| `admin_info` | Object | Admin information |
+| `status` | String | Conversation status |
+| `priority` | String | Priority level |
+| `created_at` | String | ISO timestamp of creation |
+| `last_message_at` | String | ISO timestamp of last message |
+| `unread_count` | Integer | Number of unread messages |
+| `total_messages` | Integer | Total message count |
+| `last_message` | Object | Last message preview |
+| `tags` | Array | Array of tag strings |
+
+**Example Response:**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "conversations": [
+      {
+        "id": 123,
+        "user_id": 456,
+        "user_info": {
+          "id": 456,
+          "account_name": "John Smith",
+          "phone_number": "+1234567890",
+          "status": 2
+        },
+        "admin_id": 789,
+        "admin_info": {
+          "id": 789,
+          "username": "admin_sarah",
+          "account_name": "Sarah Wilson"
+        },
+        "status": "active",
+        "priority": "normal",
+        "created_at": "2025-07-14T09:15:00Z",
+        "last_message_at": "2025-07-14T10:32:00Z",
+        "unread_count": 2,
+        "total_messages": 8,
+        "last_message": {
+          "id": 15,
+          "content": "Thank you for your help!",
+          "sender_role": "user",
+          "timestamp": "2025-07-14T10:32:00Z"
+        },
+        "tags": ["billing", "urgent"]
       }
     ],
     "pagination": {
       "page": 1,
       "limit": 20,
-      "total": 1,
-      "pages": 1
+      "total": 45,
+      "pages": 3
+    },
+    "summary": {
+      "total_active": 12,
+      "total_unread": 5,
+      "assigned_to_me": 8,
+      "unassigned": 4
     }
+  }
+}
+```
+
+## GET /admin/chat/conversations/:id
+
+Retrieves detailed information about a specific conversation for admin review.
+
+**Admin Authentication:** Required (Admin status = 87)
+
+**Path Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `id` | Integer | Conversation ID | Yes |
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:10000/admin/chat/conversations/123" \
+  -H "Authorization: Bearer admin_token_here"
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversation` | Object | Detailed conversation information |
+
+**Example Response:**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "conversation": {
+      "id": 123,
+      "user_id": 456,
+      "user_info": {
+        "id": 456,
+        "account_name": "John Smith",
+        "phone_number": "+1234567890",
+        "status": 2,
+        "created_at": "2025-06-01T12:00:00Z",
+        "last_login": "2025-07-14T08:30:00Z"
+      },
+      "admin_id": 789,
+      "admin_info": {
+        "id": 789,
+        "username": "admin_sarah",
+        "account_name": "Sarah Wilson"
+      },
+      "status": "active",
+      "priority": "normal",
+      "created_at": "2025-07-14T09:15:00Z",
+      "last_message_at": "2025-07-14T10:32:00Z",
+      "total_messages": 8,
+      "tags": ["billing", "urgent"],
+      "notes": "Customer having issues with premium subscription billing."
+    }
+  }
+}
+```
+
+## PUT /admin/chat/conversations/:id/assign
+
+Assigns a conversation to a specific admin for handling.
+
+**Admin Authentication:** Required (Admin status = 87)
+
+**Path Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `id` | Integer | Conversation ID | Yes |
+
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `admin_id` | Integer | Admin ID to assign conversation to | Yes | - |
+| `notes` | String | Assignment notes | No | - |
+
+**Example Request:**
+
+```bash
+curl -X PUT "http://localhost:10000/admin/chat/conversations/123/assign" \
+  -H "Authorization: Bearer admin_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{"admin_id": 789, "notes": "Customer billing issue - priority handling required"}'
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversation_id` | Integer | Conversation ID |
+| `data.assigned_admin` | Object | Admin information |
+| `data.notes` | String | Assignment notes |
+
+**Example Response:**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "conversation_id": 123,
+    "assigned_admin": {
+      "id": 789,
+      "username": "admin_sarah",
+      "account_name": "Sarah Wilson"
+    },
+    "notes": "Customer billing issue - priority handling required"
+  }
+}
+```
+
+## PUT /admin/chat/conversations/:id/status
+
+Updates conversation status, priority, and management tags.
+
+**Admin Authentication:** Required (Admin status = 87)
+
+**Path Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `id` | Integer | Conversation ID | Yes |
+
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `status` | String | New status ("active", "closed", "archived") | No | Current |
+| `priority` | String | Priority level ("low", "normal", "high", "urgent") | No | Current |
+| `tags` | Array | Array of tag strings | No | Current |
+| `resolution_notes` | String | Notes when closing conversation | No | - |
+
+**Example Request:**
+
+```bash
+curl -X PUT "http://localhost:10000/admin/chat/conversations/123/status" \
+  -H "Authorization: Bearer admin_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "closed",
+    "priority": "high",
+    "tags": ["billing", "resolved"],
+    "resolution_notes": "Issue resolved - refund processed"
+  }'
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.conversation_id` | Integer | Conversation ID |
+| `data.status` | String | Updated status |
+| `data.priority` | String | Updated priority |
+| `data.tags` | Array | Updated tags |
+| `data.resolution_notes` | String | Resolution notes |
+| `data.updated_by` | String | Admin who made the update |
+| `data.updated_at` | String | ISO timestamp of update |
+
+**Example Response:**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "conversation_id": 123,
+    "status": "closed",
+    "priority": "high",
+    "tags": ["billing", "resolved"],
+    "resolution_notes": "Issue resolved - refund processed",
+    "updated_by": "admin_sarah",
+    "updated_at": "2025-07-14T11:45:00Z"
+  }
+}
+```
+
+## POST /admin/chat/conversations/:id/messages
+
+Sends a message as an admin to a specific conversation.
+
+**Admin Authentication:** Required (Admin status = 87)
+
+**Path Parameters:**
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `id` | Integer | Conversation ID | Yes |
+
+**Request Body Parameters:**
+
+| Name | Type | Description | Required | Default |
+|---|---|---|---|---|
+| `message` | String | Message content | Yes | - |
+| `message_type` | String | Type of message ("text", "image", "file") | No | "text" |
+| `internal_note` | String | Private admin note (not visible to user) | No | - |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:10000/admin/chat/conversations/123/messages" \
+  -H "Authorization: Bearer admin_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Hello! I have reviewed your account and processed the refund. It should appear in 3-5 business days.",
+    "message_type": "text",
+    "internal_note": "Refund processed via admin panel - $29.99"
+  }'
+```
+
+**Response Structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | String | Request status ("success" or "error") |
+| `data` | Object | Response data container |
+| `data.id` | Integer | Message ID |
+| `data.conversation_id` | Integer | Conversation ID |
+| `data.message` | String | Message content |
+| `data.sender_role` | String | Always "admin" |
+| `data.sender_identifier` | String | Admin username |
+| `data.timestamp` | String | ISO timestamp |
+| `data.internal_note` | String | Internal note (if provided) |
+
+**Example Response:**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": 25,
+    "conversation_id": 123,
+    "message": "Hello! I have reviewed your account and processed the refund. It should appear in 3-5 business days.",
+    "sender_role": "admin",
+    "sender_identifier": "admin_sarah",
+    "timestamp": "2025-07-14T11:30:00Z",
+    "internal_note": "Refund processed via admin panel - $29.99"
   }
 }
 ```
@@ -297,10 +810,13 @@ message_type: "image" | "file"
 
 ## WebSocket Events
 
+The IM system uses WebSocket connections for real-time messaging and notifications.
+
 ### Connection Setup
 
+**User Connection:**
+
 ```javascript
-// Client connection
 const socket = io('http://47.94.108.189:10000', {
   auth: {
     token: 'user_token_here'
@@ -308,11 +824,71 @@ const socket = io('http://47.94.108.189:10000', {
 });
 ```
 
+**Admin Connection:**
+
+```javascript
+const adminSocket = io('http://47.94.108.189:10000', {
+  auth: {
+    token: 'admin_token_here',
+    role: 'admin'
+  }
+});
+
+// Auto-join admin rooms
+adminSocket.emit('join_admin_rooms', {
+  rooms: ['admin_dashboard', 'admin_notifications']
+});
+```
+
+### Client Events (Sent to Server)
+
+#### join_conversation
+
+Join a conversation room to receive real-time updates.
+
+```json
+{
+  "event": "join_conversation",
+  "data": {
+    "conversation_id": 456
+  }
+}
+```
+
+#### send_message
+
+Send a message through WebSocket.
+
+```json
+{
+  "event": "send_message",
+  "data": {
+    "conversation_id": 456,
+    "message_type": "text",
+    "content": "Hello there!",
+    "file_id": null
+  }
+}
+```
+
+#### typing_start/typing_stop
+
+Send typing indicators.
+
+```json
+{
+  "event": "typing_start",
+  "data": {
+    "conversation_id": 456
+  }
+}
+```
+
 ### Server Events (Sent to Client)
 
-#### 1. new_message
+#### new_message
 
-**Description**: New message received in conversation
+Receive new messages in real-time.
 
 ```json
 {
@@ -329,9 +905,9 @@ const socket = io('http://47.94.108.189:10000', {
 }
 ```
 
-#### 2. typing_indicator
+#### typing_indicator
 
-**Description**: Someone is typing in the conversation
+Receive typing indicators from other participants.
 
 ```json
 {
@@ -345,159 +921,89 @@ const socket = io('http://47.94.108.189:10000', {
 }
 ```
 
-#### 3. message_read
+#### admin_conversation_assigned
 
-**Description**: Message has been read
+Notify admin when conversation is assigned (Admin only).
 
 ```json
 {
-  "event": "message_read",
+  "event": "admin_conversation_assigned",
   "data": {
     "conversation_id": 456,
-    "message_ids": [1, 2, 3],
-    "read_by": "admin"
+    "user_info": {
+      "id": 123,
+      "account_name": "John Smith",
+      "status": 2
+    },
+    "priority": "high",
+    "tags": ["billing", "urgent"],
+    "assigned_by": "admin_manager",
+    "notes": "Customer billing issue - priority handling required"
   }
 }
 ```
 
-#### 4. conversation_status
+#### admin_new_conversation
 
-**Description**: Conversation status changed
+Notify admins of new conversations (Admin only).
 
 ```json
 {
-  "event": "conversation_status",
+  "event": "admin_new_conversation",
   "data": {
-    "conversation_id": 456,
-    "status": "closed",
-    "changed_by": "admin"
+    "conversation_id": 789,
+    "user_info": {
+      "id": 456,
+      "account_name": "Jane Doe",
+      "status": 2
+    },
+    "initial_message": "I'm having trouble with my subscription",
+    "created_at": "2025-07-14T12:00:00Z",
+    "priority": "normal"
   }
 }
 ```
 
-### Client Events (Sent to Server)
+#### admin_dashboard_update
 
-#### 1. join_conversation
-
-**Description**: Join a conversation room
+Real-time dashboard statistics (Admin only).
 
 ```json
 {
-  "event": "join_conversation",
+  "event": "admin_dashboard_update",
   "data": {
-    "conversation_id": 456
+    "total_active": 23,
+    "total_unread": 8,
+    "assigned_to_me": 12,
+    "unassigned": 4,
+    "avg_response_time": "4.2 minutes"
   }
 }
-```
-
-#### 2. send_message
-
-**Description**: Send a message
-
-```json
-{
-  "event": "send_message",
-  "data": {
-    "conversation_id": 456,
-    "message_type": "text",
-    "content": "Hello there!",
-    "file_id": null
-  }
-}
-```
-
-#### 3. typing_start/typing_stop
-
-**Description**: Start/stop typing indicator
-
-```json
-{
-  "event": "typing_start",
-  "data": {
-    "conversation_id": 456
-  }
-}
-```
-
----
-
-## Database Schema
-
-### conversations Table
-
-```sql
-CREATE TABLE conversations (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id INT UNSIGNED NOT NULL,
-    admin_id INT UNSIGNED NULL,
-    status ENUM('active', 'closed', 'archived') DEFAULT 'active',
-    last_message_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    INDEX idx_user_id (user_id),
-    INDEX idx_admin_id (admin_id),
-    INDEX idx_status (status),
-    INDEX idx_last_message (last_message_at),
-    
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-```
-
-### messages Table
-
-```sql
-CREATE TABLE messages (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    conversation_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NULL,
-    admin_id INT UNSIGNED NULL,
-    sender_role ENUM('user', 'admin') NOT NULL,
-    message_type ENUM('text', 'image', 'file', 'system') DEFAULT 'text',
-    content TEXT NOT NULL,
-    file_id VARCHAR(255) NULL,
-    file_url VARCHAR(500) NULL,
-    metadata JSON NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_conversation (conversation_id),
-    INDEX idx_timestamp (timestamp),
-    INDEX idx_sender (sender_role, user_id, admin_id),
-    INDEX idx_read (is_read),
-    FULLTEXT idx_content (content),
-    
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-);
 ```
 
 ---
 
 ## Error Handling
 
-### Standard Error Response Format
+All IM API endpoints follow the standard error response format described in `api_table.md`.
 
-```json
-{
-  "status": "error",
-  "message": "Description of the error",
-  "error_code": "SPECIFIC_ERROR_CODE"
-}
-```
+### Common IM-Specific Error Codes
 
-### HTTP Status Codes
+| Status Code | Error Message | Description |
+|-------------|---------------|-------------|
+| **400** | "Invalid conversation ID" | Conversation does not exist |
+| **403** | "Access denied to conversation" | User not authorized for conversation |
+| **403** | "Admin access required" | Endpoint requires admin privileges |
+| **404** | "Conversation not found" | Conversation ID invalid |
+| **413** | "File too large" | Upload exceeds size limit |
+| **429** | "Rate limit exceeded" | Too many messages sent |
 
-| Status Code | Description | When It Occurs |
-|-------------|-------------|----------------|
-| **200** | Success | Request completed successfully |
-| **201** | Created | New message/conversation created |
-| **400** | Bad Request | Invalid parameters, empty message |
-| **401** | Unauthorized | Invalid authentication |
-| **403** | Forbidden | Access denied to conversation |
-| **404** | Not Found | Conversation not found |
-| **413** | Payload Too Large | File upload too large |
-| **429** | Too Many Requests | Rate limit exceeded |
-| **500** | Internal Server Error | Server-side error |
+### Rate Limiting
+
+- **Message sending**: 60 messages per minute per user
+- **File uploads**: 10 files per minute per user
+- **Typing indicators**: 10 per minute per conversation
+- **Admin operations**: 100 requests per minute per admin
 
 ### WebSocket Error Events
 
@@ -511,245 +1017,13 @@ CREATE TABLE messages (
 }
 ```
 
-### Rate Limiting
-
-- **Message sending**: 60 messages per minute
-- **File uploads**: 10 files per minute
-- **Typing indicators**: 10 per minute
-
 ---
 
-## iOS Integration Guide
+## Security Notes
 
-### 1. Socket.io Client Setup
-
-```swift
-import SocketIO
-
-class ChatService: ObservableObject {
-    private let manager: SocketManager
-    private let socket: SocketIOClient
-    
-    init() {
-        manager = SocketManager(
-            socketURL: URL(string: "http://47.94.108.189:10000")!,
-            config: [
-                .log(true),
-                .compress
-            ]
-        )
-        socket = manager.defaultSocket
-        setupSocketEvents()
-    }
-    
-    private func setupSocketEvents() {
-        socket.on(clientEvent: .connect) { data, ack in
-            print("Connected to chat server")
-        }
-        
-        socket.on("new_message") { [weak self] data, ack in
-            if let messageData = data[0] as? [String: Any] {
-                self?.handleNewMessage(messageData)
-            }
-        }
-        
-        socket.on("typing_indicator") { [weak self] data, ack in
-            if let typingData = data[0] as? [String: Any] {
-                self?.handleTypingIndicator(typingData)
-            }
-        }
-    }
-    
-    func connect() {
-        socket.connect()
-    }
-    
-    func disconnect() {
-        socket.disconnect()
-    }
-    
-    func joinConversation(_ conversationId: Int) {
-        socket.emit("join_conversation", ["conversation_id": conversationId])
-    }
-    
-    func sendMessage(_ content: String, conversationId: Int) {
-        socket.emit("send_message", [
-            "conversation_id": conversationId,
-            "message_type": "text",
-            "content": content
-        ])
-    }
-}
-```
-
-### 2. MessageKit Integration
-
-```swift
-import MessageKit
-
-struct ChatMessage: MessageType {
-    var sender: SenderType
-    var messageId: String
-    var sentDate: Date
-    var kind: MessageKind
-}
-
-struct ChatUser: SenderType {
-    var senderId: String
-    var displayName: String
-}
-
-class ChatViewController: MessagesViewController {
-    private let chatService = ChatService()
-    private var messages: [ChatMessage] = []
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        setupMessageKit()
-        chatService.connect()
-    }
-    
-    private func setupMessageKit() {
-        messagesCollectionView.messagesDataSource = self
-        messagesCollectionView.messagesLayoutDelegate = self
-        messagesCollectionView.messagesDisplayDelegate = self
-        messageInputBar.delegate = self
-    }
-}
-```
-
-### 3. Push Notifications Setup
-
-```swift
-import UserNotifications
-import Firebase
-
-class NotificationService {
-    func requestPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            }
-        }
-    }
-    
-    func handleRemoteNotification(_ userInfo: [AnyHashable: Any]) {
-        if let conversationId = userInfo["conversation_id"] as? Int {
-            // Navigate to conversation
-        }
-    }
-}
-```
-
----
-
-## Security Considerations
-
-### Authentication Flow
-
-1. **App-level Authentication**: X-Timestamp + X-Signature headers
-2. **User Authentication**: user_id in request body with Redis session validation
-3. **WebSocket Authentication**: user_id passed in socket auth config
-
-### Message Security
-
-- **Input Sanitization**: All message content sanitized for XSS
-- **File Validation**: File type, size, and content validation
-- **Rate Limiting**: Prevents spam and abuse
-
-### Data Protection
-
-- **Encryption**: Optional message encryption at rest
-- **Access Control**: Users can only access their own conversations
-- **Audit Logging**: All admin actions logged
-
----
-
-## Performance Optimizations
-
-### Database Optimizations
-
-- **Indexes**: Proper indexing on frequently queried fields
-- **Pagination**: Large result sets paginated
-- **Archiving**: Old conversations moved to archive tables
-
-### WebSocket Optimizations
-
-- **Connection Pooling**: Efficient connection management
-- **Room Management**: Users only join relevant conversation rooms
-- **Message Queuing**: Offline message delivery
-
-### Caching Strategy
-
-- **Active Conversations**: Cache frequently accessed conversations
-- **Message History**: Cache recent messages for quick access
-- **User Presence**: Cache online/offline status
-
----
-
-## Admin Features (Web Manager)
-
-### Conversation Management
-
-- **Dashboard**: Overview of all active conversations
-- **Assignment**: Assign conversations to specific admins
-- **Status Control**: Open/close/archive conversations
-- **Bulk Actions**: Mass operations on conversations
-
-### Analytics
-
-- **Response Time**: Average admin response time
-- **Message Volume**: Daily/weekly message statistics
-- **User Satisfaction**: Optional feedback system
-- **Resolution Rate**: Conversation resolution tracking
-
----
-
-## Testing
-
-### Unit Tests
-
-- Message validation
-- Authentication flow
-- Database operations
-- WebSocket event handling
-
-### Integration Tests
-
-- End-to-end message flow
-- File upload process
-- Real-time event delivery
-- iOS client integration
-
-### Load Testing
-
-- Concurrent connections
-- Message throughput
-- Database performance
-- WebSocket scalability
-
----
-
-## Deployment Considerations
-
-### Server Requirements
-
-- **Node.js**: v16+ for Socket.io support
-- **Memory**: Additional RAM for WebSocket connections
-- **Network**: WebSocket-compatible reverse proxy
-
-### Monitoring
-
-- **Connection Count**: Active WebSocket connections
-- **Message Rate**: Messages per second
-- **Error Rate**: Failed message delivery
-- **Response Time**: API and WebSocket latency
-
-### Scaling
-
-- **Horizontal Scaling**: Multiple server instances
-- **Load Balancing**: Sticky sessions for WebSocket
-- **Database Sharding**: Partition by conversation_id
-- **CDN**: File attachments served via CDN
+1. **Authentication**: All endpoints require valid app-level authentication
+2. **Admin Authorization**: Admin endpoints verify `status = 87` in users table
+3. **WebSocket Security**: Token-based authentication for Socket.IO connections
+4. **File Upload Security**: Virus scanning and file type validation
+5. **Rate Limiting**: Prevents spam and abuse
+6. **Audit Trail**: All admin actions logged in `admin_activity_log` table

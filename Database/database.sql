@@ -304,38 +304,51 @@ DELIMITER ;
 -- IM (INSTANT MESSAGING) TABLES
 -- ===================================================================
 
--- Conversations table for user-admin messaging
+-- Conversations table for user-admin messaging (Enhanced for Admin Features)
 CREATE TABLE IF NOT EXISTS conversations (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,
     admin_id INT UNSIGNED NULL COMMENT 'Assigned admin for this conversation',
-    status ENUM('active', 'closed', 'archived') DEFAULT 'active',
+    status ENUM('active', 'closed', 'archived', 'pending') DEFAULT 'active',
+    priority ENUM('low', 'normal', 'high', 'urgent') DEFAULT 'normal',
     last_message_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    assigned_at TIMESTAMP NULL COMMENT 'When conversation was assigned to admin',
+    closed_at TIMESTAMP NULL COMMENT 'When conversation was closed',
+    resolution_notes TEXT NULL COMMENT 'Admin notes when closing conversation',
+    internal_notes TEXT NULL COMMENT 'Private admin notes',
+    tags JSON NULL COMMENT 'Array of tag strings for categorization',
     -- Performance indexes
     INDEX idx_user_id (user_id),
     INDEX idx_admin_id (admin_id),
     INDEX idx_status (status),
+    INDEX idx_priority (priority),
     INDEX idx_last_message (last_message_at),
     INDEX idx_created_at (created_at),
+    INDEX idx_assigned_at (assigned_at),
+    INDEX idx_status_priority (status, priority),
     -- Foreign keys
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Messages table for storing chat messages
+-- Messages table for storing chat messages (Enhanced for Admin Features)
 CREATE TABLE IF NOT EXISTS messages (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     conversation_id INT UNSIGNED NOT NULL,
     user_id INT UNSIGNED NULL COMMENT 'User ID if sent by user',
     admin_id INT UNSIGNED NULL COMMENT 'Admin ID if sent by admin',
     sender_role ENUM('user', 'admin', 'system') NOT NULL,
-    message_type ENUM('text', 'image', 'file', 'system') DEFAULT 'text',
+    message_type ENUM('text', 'image', 'file', 'system', 'internal_note') DEFAULT 'text',
     content TEXT NOT NULL,
     file_id VARCHAR(255) NULL COMMENT 'Reference to uploaded file',
     file_url VARCHAR(500) NULL COMMENT 'Direct URL to file',
     metadata JSON NULL COMMENT 'Additional message metadata',
     is_read BOOLEAN DEFAULT FALSE,
+    is_internal BOOLEAN DEFAULT FALSE COMMENT 'True for admin-only internal notes',
+    internal_note TEXT NULL COMMENT 'Admin-only internal note for this message',
+    edited_at TIMESTAMP NULL COMMENT 'When message was last edited',
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Performance indexes
     INDEX idx_conversation (conversation_id),
@@ -343,12 +356,55 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_sender_user (sender_role, user_id),
     INDEX idx_sender_admin (sender_role, admin_id),
     INDEX idx_read (is_read),
+    INDEX idx_internal (is_internal),
     INDEX idx_message_type (message_type),
     -- Full-text search index
     FULLTEXT idx_content (content),
     -- Foreign keys
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- Conversation participants table for multi-admin support
+CREATE TABLE IF NOT EXISTS conversation_participants (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    conversation_id INT UNSIGNED NOT NULL,
+    admin_id INT UNSIGNED NOT NULL,
+    role ENUM('assigned', 'observer', 'supervisor') DEFAULT 'assigned',
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_read_message_id INT UNSIGNED NULL COMMENT 'Last message read by this admin',
+    -- Performance indexes
+    INDEX idx_conversation (conversation_id),
+    INDEX idx_admin (admin_id),
+    INDEX idx_role (role),
+    -- Unique constraint to prevent duplicate admin assignments
+    UNIQUE KEY unique_conversation_admin (conversation_id, admin_id),
+    -- Foreign keys
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (last_read_message_id) REFERENCES messages(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- Admin activity log table for audit trail
+CREATE TABLE IF NOT EXISTS admin_activity_log (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    admin_id INT UNSIGNED NOT NULL,
+    conversation_id INT UNSIGNED NULL COMMENT 'Related conversation if applicable',
+    action ENUM('assign', 'close', 'reopen', 'priority_change', 'status_change', 'add_tag', 'remove_tag', 'add_note') NOT NULL,
+    old_value VARCHAR(255) NULL COMMENT 'Previous value before change',
+    new_value VARCHAR(255) NULL COMMENT 'New value after change',
+    notes TEXT NULL COMMENT 'Additional context for the action',
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Performance indexes
+    INDEX idx_admin (admin_id),
+    INDEX idx_conversation (conversation_id),
+    INDEX idx_action (action),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_admin_timestamp (admin_id, timestamp),
+    -- Foreign keys
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ===================================================================
